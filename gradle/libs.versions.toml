@@ -1,0 +1,6 @@
+[versions]
+# Verify against the current stable release before the first build.
+kotlin = "2.2.0"
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
