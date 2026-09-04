@@ -14,7 +14,7 @@ exist yet.
 
 | Module    | State       | What it is |
 |-----------|-------------|------------|
-| `:engine` | **present** | Pure Kotlin/JVM. Date arithmetic, patterns, presets. No Android dependency, so its tests run in milliseconds without an emulator. |
+| `:engine` | **present** | Pure Kotlin/JVM. Date arithmetic, patterns, presets, `.ics` export, share-link encoding. No Android dependency, so its tests run in milliseconds without an emulator. |
 | `:data`   | planned     | Room entities, DAOs, repositories, backup/restore, migrations. |
 | `:app`    | planned     | Compose UI, notification scheduling, ad slots. |
 | `:widget` | planned     | Glance home-screen widget. |
