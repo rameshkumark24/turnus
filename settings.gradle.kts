@@ -16,6 +16,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "turnus"
 
-// :data, :app and :widget are added when the Android modules land.
-// :engine is pure Kotlin/JVM, so this builds and tests without the Android SDK.
+// :engine is pure Kotlin/JVM and builds without the Android SDK.
 include(":engine")
+
+// :data owns Room. :app and :widget follow.
+include(":data")

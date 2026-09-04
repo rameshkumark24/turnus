@@ -1,6 +1,32 @@
 [versions]
-# Verify against the current stable release before the first build.
+# Pinned to what is already resolved on this machine, so builds stay offline-fast.
 kotlin = "2.2.0"
+ksp = "2.2.0-2.0.2"          # must track `kotlin` exactly
+# AGP 9.x is required: Gradle 9.6 removed an internal API that AGP 8.x used.
+agp = "9.1.0"
+room = "2.8.4"
+coreKtx = "1.18.0"
+
+# SDK levels. minSdk 26 gives notification channels as a baseline and covers
+# effectively every device still in use.
+minSdk = "26"
+compileSdk = "36"
+targetSdk = "36"
+
+[libraries]
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+
+# Android unit tests run on JUnit4, so the Android modules take the junit
+# flavour of kotlin-test. :engine is plain JVM and uses the JUnit Platform.
+kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
