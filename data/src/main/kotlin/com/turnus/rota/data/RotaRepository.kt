@@ -114,6 +114,10 @@ class RotaRepository(
     suspend fun shiftDefinitions(): Map<String, ShiftDefinition> =
         shiftTypes.getAll().associate { it.id to it.toDefinition() }
 
+    /** One-shot read, in display order, for flows that do not need to observe. */
+    suspend fun shiftStyles(): List<ShiftStyle> =
+        shiftTypes.getAll().map { ShiftStyle(it.id, it.code, it.name, it.color, it.isWorking) }
+
     // ----------------------------------------------------------------- writes
 
     /**

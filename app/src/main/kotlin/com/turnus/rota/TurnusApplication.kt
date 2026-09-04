@@ -34,31 +34,11 @@ class TurnusApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        scope.launch { installStarterData() }
-    }
-
-    /**
-     * Seeds the default shift types, and — temporarily — a starter pattern.
-     *
-     * The shift-type seeding is permanent: presets reference the engine's
-     * canonical ids, so those rows have to exist before any preset resolves.
-     *
-     * The starter pattern is SCAFFOLDING. It exists so the app opens onto a
-     * populated grid while the setup flow does not exist yet, and it must be
-     * deleted the moment the anchor picker lands — shipping it would silently
-     * decide a user's rota for them, which is precisely the thing this app
-     * must never get wrong.
-     */
-    private suspend fun installStarterData() {
-        repository.seedDefaultsIfEmpty()
-
-        if (repository.activePattern() == null) {
-            repository.saveActivePattern(
-                Presets.FOUR_ON_FOUR_OFF.toPattern(
-                    id = "starter",
-                    anchor = DayNumber.today(),
-                ),
-            )
-        }
+        // Seeds the default shift types only. Presets reference the engine's
+        // canonical ids, so those rows must exist before any preset resolves.
+        //
+        // No starter pattern: the app must never decide a user's rota for them.
+        // With no pattern saved, the root routes to setup instead.
+        scope.launch { repository.seedDefaultsIfEmpty() }
     }
 }
