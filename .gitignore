@@ -32,3 +32,6 @@ google-services.json
 
 # --- Logs ---
 *.log
+
+# --- IDE build output (Eclipse/VS Code Kotlin) ---
+bin/
