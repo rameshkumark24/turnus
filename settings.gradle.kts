@@ -21,3 +21,4 @@ include(":engine")
 
 // :data owns Room. :app and :widget follow.
 include(":data")
+include(":app")

@@ -6,6 +6,10 @@ ksp = "2.2.0-2.0.2"          # must track `kotlin` exactly
 agp = "9.1.0"
 room = "2.8.4"
 coreKtx = "1.18.0"
+composeBom = "2026.06.01"
+activityCompose = "1.13.0"
+# 2.11.0 requires compileSdk 37, which AGP 9.1.0 does not support.
+lifecycle = "2.9.4"
 
 # SDK levels. minSdk 26 gives notification channels as a baseline and covers
 # effectively every device still in use.
@@ -24,9 +28,23 @@ core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 # flavour of kotlin-test. :engine is plain JVM and uses the JUnit Platform.
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
+# Compose. The BOM pins every compose artifact, so none of these carry versions.
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

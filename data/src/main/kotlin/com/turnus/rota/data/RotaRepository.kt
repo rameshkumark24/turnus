@@ -34,6 +34,21 @@ class UnknownShiftTypeException internal constructor(
 ) : IllegalArgumentException("No shift type for id(s): ${ids.joinToString()}")
 
 /**
+ * A shift type as the UI needs it: the engine's [ShiftDefinition] plus the
+ * presentation fields.
+ *
+ * Colour deliberately does not live in `:engine` — the engine is pure rota
+ * logic and must stay free of anything that only means something on a screen.
+ */
+data class ShiftStyle(
+    val id: String,
+    val code: String,
+    val name: String,
+    val color: Int,
+    val isWorking: Boolean,
+)
+
+/**
  * The only way the app touches stored rota data.
  *
  * Three invariants live here rather than in the schema, because SQLite CHECK
@@ -63,6 +78,14 @@ class RotaRepository(
 
     fun observeActivePattern(): Flow<Pattern?> =
         patterns.observeActive().map { it?.toDomain() }
+
+    /** Shift types with their colours, keyed by id, for rendering the grid. */
+    fun observeShiftStyles(): Flow<Map<String, ShiftStyle>> =
+        shiftTypes.observeAll().map { rows ->
+            rows.associate {
+                it.id to ShiftStyle(it.id, it.code, it.name, it.color, it.isWorking)
+            }
+        }
 
     /**
      * The resolved calendar for an inclusive range.
