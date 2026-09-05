@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -24,6 +26,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -32,10 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.data.ShiftStyle
@@ -61,7 +66,11 @@ fun MonthScreen(viewModel: MonthViewModel) {
         val result = snackbarHostState.showSnackbar(
             message = action.message,
             actionLabel = "Undo",
-            duration = SnackbarDuration.Short,
+            // Long, not Short. Short is four seconds to notice a silent edit,
+            // decide it was wrong, and get a thumb to the bottom of a 6.7"
+            // screen. Testing on a real phone, the window closed before the
+            // action could be hit twice running.
+            duration = SnackbarDuration.Long,
         )
         if (result == SnackbarResult.ActionPerformed) {
             viewModel.performUndo()
@@ -100,14 +109,14 @@ fun MonthScreen(viewModel: MonthViewModel) {
             TodaySummary(state)
 
             Spacer(Modifier.height(10.dp))
-            WeekdayHeader(state)
-            Spacer(Modifier.height(4.dp))
 
-            MonthGrid(state = state, onDayClick = viewModel::openDay)
-
-            // Takes the slack so the grid keeps its natural proportions and the
-            // banner stays pinned to the bottom rather than the cells stretching.
-            Spacer(Modifier.weight(1f))
+            // Given all the remaining space rather than its natural size, so it
+            // can discover how much height it actually has to fit six weeks in.
+            MonthCalendar(
+                state = state,
+                onDayClick = viewModel::openDay,
+                modifier = Modifier.weight(1f),
+            )
 
             // The anchored banner slot lands here. Its height is reserved from
             // the start so the grid never jumps when an ad fills or fails.
@@ -162,8 +171,11 @@ private fun MonthHeader(
 private fun StepButton(label: String, description: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
+        // sizeIn, not size: at a 2x font scale the glyph is larger than a fixed
+        // 44dp box and the arrows were sliced down to bare diagonal strokes.
+        // 44dp stays the floor, for the touch target.
         modifier = Modifier
-            .size(44.dp)
+            .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
             .semantics { contentDescription = description },
     ) {
         Text(
@@ -191,11 +203,86 @@ private fun TodaySummary(state: MonthUiState) {
     )
 }
 
+/**
+ * The month grid, sized to fit rather than sized from the width.
+ *
+ * Six rows at a fixed aspect ratio are only guaranteed to fit when the screen
+ * is portrait-shaped. In landscape the same arithmetic made the grid two and a
+ * half screens tall, and because nothing here scrolls the weeks simply drew on
+ * top of one another. So the cell is measured against both axes and the whole
+ * block is centred when height is the binding constraint.
+ *
+ * The weekday header is inside this box, not above it, because it has to line
+ * up with columns whose width is decided here.
+ */
+@Composable
+private fun MonthCalendar(
+    state: MonthUiState,
+    onDayClick: (DayNumber) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val gridDensity = remember(density) {
+        // Only the font scale is capped. Keeping the same `density` means every
+        // dp in here still measures exactly what it does everywhere else.
+        Density(density.density, density.fontScale.coerceAtMost(TurnusTokens.GridFontScaleCap))
+    }
+
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        val gap = TurnusTokens.CellGap
+        val rows = MonthViewModel.WEEKS
+
+        val widthBoundCell = (maxWidth - gap * (COLUMNS - 1)) / COLUMNS
+        val naturalHeight = widthBoundCell / TurnusTokens.CellAspect
+        val heightBudget = maxHeight - TurnusTokens.WeekdayRowHeight - gap * rows
+
+        val heightBound = naturalHeight * rows > heightBudget
+        val cellHeight = if (heightBound) heightBudget / rows else naturalHeight
+        val cellWidth = if (heightBound) cellHeight * TurnusTokens.CellAspect else widthBoundCell
+
+        CompositionLocalProvider(LocalDensity provides gridDensity) {
+            Column(
+                modifier = Modifier.width(cellWidth * COLUMNS + gap * (COLUMNS - 1)),
+                verticalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                WeekdayHeader(state)
+                repeat(rows) { week ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        repeat(COLUMNS) { column ->
+                            val index = week * COLUMNS + column
+                            DayCell(
+                                cell = state.days.getOrNull(index),
+                                state = state,
+                                onClick = onDayClick,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(cellHeight),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun WeekdayHeader(state: MonthUiState) {
     val locale = Locale.getDefault()
-    Row(Modifier.fillMaxWidth()) {
-        repeat(7) { index ->
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // A known height, so the grid above can budget for it honestly.
+            .height(TurnusTokens.WeekdayRowHeight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(COLUMNS) { index ->
             val day = state.firstDayOfWeek.plus(index.toLong())
             Text(
                 text = day.getDisplayName(JavaTextStyle.SHORT, locale),
@@ -208,42 +295,6 @@ private fun WeekdayHeader(state: MonthUiState) {
                     // The row is decoration; the cells carry the real labels.
                     .clearAndSetSemantics { },
             )
-        }
-    }
-}
-
-@Composable
-private fun MonthGrid(
-    state: MonthUiState,
-    onDayClick: (DayNumber) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
-    ) {
-        repeat(MonthViewModel.WEEKS) { week ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
-            ) {
-                repeat(7) { column ->
-                    val index = week * 7 + column
-                    val cell = state.days.getOrNull(index)
-                    DayCell(
-                        cell = cell,
-                        state = state,
-                        onClick = onDayClick,
-                        // A fixed shape rather than filling the column height.
-                        // Weight-filling six rows into a tall screen stretched
-                        // every cell to roughly 2:1, which reads as a bar chart
-                        // rather than a calendar.
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(TurnusTokens.CellAspect),
-                    )
-                }
-            }
         }
     }
 }
@@ -293,11 +344,24 @@ private fun DayCell(
             .background(background.copy(alpha = if (inMonth) 1f else 0.32f))
             .then(
                 if (isToday) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(TurnusTokens.CellCorner),
-                    )
+                    // Derived from the cell's own luminance, like the label, not
+                    // painted in the accent. The accent ring was petrol on a
+                    // dark blue night shift in light mode — all but invisible,
+                    // on the one cell the whole screen is organised around. A
+                    // shift colour is user-chosen, so the only colour certain to
+                    // contrast with it is one computed from it.
+                    //
+                    // Inset, so the ring has cell colour on both sides. Drawn on
+                    // the outer edge it contrasted with the cell but vanished
+                    // into the page behind it, which in light mode left today
+                    // looking like a slightly smaller square.
+                    Modifier
+                        .padding(TurnusTokens.TodayRingInset)
+                        .border(
+                            width = TurnusTokens.TodayRingWidth,
+                            color = foreground.copy(alpha = if (inMonth) 1f else 0.6f),
+                            shape = RoundedCornerShape(TurnusTokens.CellCorner),
+                        )
                 } else {
                     Modifier
                 }
@@ -334,6 +398,8 @@ private fun DayCell(
         }
     }
 }
+
+private const val COLUMNS = 7
 
 private val MONTH_TITLE: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL yyyy")
 private val CELL_ANNOUNCE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM")

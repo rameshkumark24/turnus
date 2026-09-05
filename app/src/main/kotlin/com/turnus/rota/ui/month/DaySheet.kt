@@ -1,6 +1,7 @@
 package com.turnus.rota.ui.month
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -163,6 +164,25 @@ private fun ShiftOption(
         modifier = modifier
             .clip(RoundedCornerShape(TurnusTokens.CellCorner))
             .background(background)
+            // Bold weight alone was the only mark of the current shift, which on
+            // a 16sp glyph over a coloured chip is no mark at all: the sheet
+            // told a screen reader "Day, current" and told everyone else
+            // nothing. Same ring as today's cell in the grid, for the same
+            // reason — computed from the chip's own colour so it contrasts
+            // whatever the user picked.
+            .then(
+                if (selected) {
+                    Modifier
+                        .padding(TurnusTokens.TodayRingInset)
+                        .border(
+                            width = TurnusTokens.TodayRingWidth,
+                            color = foreground,
+                            shape = RoundedCornerShape(TurnusTokens.CellCorner),
+                        )
+                } else {
+                    Modifier
+                }
+            )
             .semantics {
                 contentDescription = if (selected) "${style.name}, current" else style.name
             },

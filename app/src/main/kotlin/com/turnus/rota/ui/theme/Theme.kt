@@ -66,6 +66,30 @@ object TurnusTokens {
     /** Cell width divided by height. Slightly taller than square, to fit a day number above a shift code. */
     val CellAspect = 0.82f
     val ScreenPadding = 14.dp
+    /** One line of weekday initials above the grid. Fixed so the grid can budget for it. */
+    val WeekdayRowHeight = 22.dp
+
+    /**
+     * The "this is today" and "this is your current shift" ring.
+     *
+     * Inset rather than drawn on the edge, so the ring always has the cell's own
+     * colour on both sides of it and never has to contrast with the page behind.
+     */
+    val TodayRingWidth = 2.dp
+    val TodayRingInset = 2.dp
+
+    /**
+     * Ceiling on the user's font scale *inside the month grid only*.
+     *
+     * A calendar is a fixed geometry: seven columns and six rows have to be on
+     * screen at once, so cell text cannot grow without either clipping or
+     * pushing weeks off the bottom. At 2x it clipped every shift code in half.
+     * Everything outside the grid — headers, the day editor, the whole setup
+     * flow — still scales without limit, and each cell's spoken description
+     * carries the full date and shift name, so nothing is only available to
+     * people who can read 11sp text.
+     */
+    const val GridFontScaleCap = 1.3f
 }
 
 private val LightColors = lightColorScheme(
@@ -73,6 +97,21 @@ private val LightColors = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = TurnusTokens.AccentSoft,
     onPrimaryContainer = TurnusTokens.Accent,
+    // Secondary and tertiary are mapped onto the accent rather than left at
+    // their defaults: any Material component that reaches for them would
+    // otherwise paint itself baseline purple in the middle of this palette.
+    secondary = TurnusTokens.Accent,
+    onSecondary = Color.White,
+    secondaryContainer = TurnusTokens.AccentSoft,
+    onSecondaryContainer = TurnusTokens.Accent,
+    tertiary = TurnusTokens.Ink2,
+    onTertiary = Color.White,
+    // The snackbar lives on the inverse roles. Leaving them unset is what put
+    // a purple "Undo" on screen — the one control in the app that has to be
+    // found and hit inside a few seconds.
+    inverseSurface = TurnusTokens.Ink,
+    inverseOnSurface = TurnusTokens.Ground,
+    inversePrimary = TurnusTokens.AccentD,
     background = TurnusTokens.Ground,
     onBackground = TurnusTokens.Ink,
     surface = TurnusTokens.Surface,
@@ -90,6 +129,15 @@ private val DarkColors = darkColorScheme(
     onPrimary = Color(0xFF06323B),
     primaryContainer = TurnusTokens.AccentSoftD,
     onPrimaryContainer = TurnusTokens.AccentD,
+    secondary = TurnusTokens.AccentD,
+    onSecondary = Color(0xFF06323B),
+    secondaryContainer = TurnusTokens.AccentSoftD,
+    onSecondaryContainer = TurnusTokens.AccentD,
+    tertiary = TurnusTokens.Ink2D,
+    onTertiary = Color(0xFF06323B),
+    inverseSurface = TurnusTokens.InkD,
+    inverseOnSurface = TurnusTokens.Ink,
+    inversePrimary = TurnusTokens.Accent,
     background = TurnusTokens.GroundD,
     onBackground = TurnusTokens.InkD,
     surface = TurnusTokens.SurfaceD,
