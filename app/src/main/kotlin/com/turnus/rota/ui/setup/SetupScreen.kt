@@ -119,8 +119,15 @@ private fun WelcomeStep(onBegin: () -> Unit) {
             Text("Set up my rota")
         }
         Spacer(Modifier.height(10.dp))
+        // "Your rota", not "everything". This app is ad-funded, and an ad SDK
+        // sends a device identifier off the phone — so "everything stays on this
+        // phone" becomes false the moment the banner ships, in the one place a
+        // user is told to trust it. The narrower claim is the one that stays
+        // true: the rota itself is never uploaded, and there is still no
+        // account. What the ads collect belongs in the privacy policy and the
+        // Play data-safety form, which have to agree with this line.
         Text(
-            "Everything stays on this phone. No account, no sign-up.",
+            "Your rota stays on this phone. No account, no sign-up.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
