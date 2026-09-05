@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -63,6 +64,12 @@ fun MonthScreen(viewModel: MonthViewModel) {
     val error by viewModel.error.collectAsStateWithLifecycle()
     val outlook by viewModel.outlook.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Read observably and pushed down, so a language change reaches the grid.
+    // The ViewModel cannot read it for itself: it survives the recreation that
+    // a locale change causes, so anything it captured once would be stale.
+    val locale = LocalLocale.current.platformLocale
+    LaunchedEffect(locale) { viewModel.setLocale(locale) }
 
     // Undo is the safety net for the day editor: an accidental tap rewrites a
     // shift silently, and the user may not notice until that day arrives.
@@ -295,7 +302,9 @@ private fun MonthCalendar(
 
 @Composable
 private fun WeekdayHeader(state: MonthUiState) {
-    val locale = Locale.getDefault()
+    // From state, not Locale.getDefault(): the labels and the column order have
+    // to come from the same locale, and only one of them can be read here.
+    val locale = state.locale
     Row(
         modifier = Modifier
             .fillMaxWidth()

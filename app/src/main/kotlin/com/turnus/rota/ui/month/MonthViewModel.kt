@@ -56,6 +56,8 @@ data class UndoAction(
 data class MonthUiState(
     val yearMonth: YearMonth,
     val firstDayOfWeek: DayOfWeek,
+    /** Carried in state so the weekday labels and the column order always agree. */
+    val locale: Locale,
     val days: List<ResolvedDay>,
     val styles: Map<String, ShiftStyle>,
     val today: DayNumber,
@@ -67,9 +69,11 @@ data class MonthUiState(
     companion object {
         fun empty(): MonthUiState {
             val now = YearMonth.now()
+            val locale = Locale.getDefault()
             return MonthUiState(
                 yearMonth = now,
-                firstDayOfWeek = localeFirstDayOfWeek(),
+                firstDayOfWeek = localeFirstDayOfWeek(locale),
+                locale = locale,
                 days = emptyList(),
                 styles = emptyMap(),
                 today = DayNumber.today(),
@@ -87,8 +91,8 @@ data class MonthUiState(
  * wrong day puts every shift in the wrong column, and a shift worker reading it
  * at 5am will not notice before they act on it.
  */
-internal fun localeFirstDayOfWeek(): DayOfWeek =
-    WeekFields.of(Locale.getDefault()).firstDayOfWeek
+internal fun localeFirstDayOfWeek(locale: Locale): DayOfWeek =
+    WeekFields.of(locale).firstDayOfWeek
 
 class MonthViewModel(
     private val repository: RotaRepository,
@@ -96,10 +100,25 @@ class MonthViewModel(
 
     private val visibleMonth = MutableStateFlow(YearMonth.now())
 
+    /**
+     * The device locale, pushed in from the composition rather than read here.
+     *
+     * A ViewModel outlives the Activity that a locale change recreates, so
+     * `Locale.getDefault()` captured once would keep the old answer for the rest
+     * of the session. That is not a cosmetic staleness: the locale decides which
+     * day the week starts on, and a grid that starts on the wrong day puts every
+     * shift in the wrong column.
+     */
+    private val locale = MutableStateFlow(Locale.getDefault())
+
+    fun setLocale(value: Locale) {
+        locale.value = value
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<MonthUiState> = visibleMonth
-        .flatMapLatest { month ->
-            val firstDay = localeFirstDayOfWeek()
+    val state: StateFlow<MonthUiState> = combine(visibleMonth, locale, ::Pair)
+        .flatMapLatest { (month, currentLocale) ->
+            val firstDay = localeFirstDayOfWeek(currentLocale)
             val (start, end) = gridRange(month, firstDay)
             // Combined inside flatMapLatest, not alongside it, so the label and
             // the cells can never belong to different months mid-swipe.
@@ -110,6 +129,7 @@ class MonthViewModel(
                 MonthUiState(
                     yearMonth = month,
                     firstDayOfWeek = firstDay,
+                    locale = currentLocale,
                     days = days,
                     styles = styles,
                     today = DayNumber.today(),
