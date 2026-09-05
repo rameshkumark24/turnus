@@ -115,6 +115,51 @@ class AnchorSolverTest {
         assertEquals(listOf("c", "a", "b", "c", "a"), AnchorSolver.previewFrom(slots, 2, 5))
     }
 
+    // ------------------------------------------------------------ run position
+
+    @Test
+    fun `reports where a day sits in its run`() {
+        val slots = Presets.FOUR_ON_FOUR_OFF.slots
+
+        assertEquals(AnchorSolver.RunPosition(1, 4), AnchorSolver.runPosition(slots, 0))
+        assertEquals(AnchorSolver.RunPosition(2, 4), AnchorSolver.runPosition(slots, 1))
+        assertEquals(AnchorSolver.RunPosition(4, 4), AnchorSolver.runPosition(slots, 3))
+        // The off run.
+        assertEquals(AnchorSolver.RunPosition(1, 4), AnchorSolver.runPosition(slots, 4))
+        assertEquals(AnchorSolver.RunPosition(4, 4), AnchorSolver.runPosition(slots, 7))
+    }
+
+    /** A rota is a loop, so a run spanning the cycle boundary is still one run. */
+    @Test
+    fun `runs wrap around the end of the cycle`() {
+        // Two Days at the end, two more at the start: one run of four.
+        val slots = listOf("d", "d", null, null, null, null, "d", "d")
+
+        assertEquals(AnchorSolver.RunPosition(3, 4), AnchorSolver.runPosition(slots, 0))
+        assertEquals(AnchorSolver.RunPosition(4, 4), AnchorSolver.runPosition(slots, 1))
+        assertEquals(AnchorSolver.RunPosition(1, 4), AnchorSolver.runPosition(slots, 6))
+        assertEquals(AnchorSolver.RunPosition(2, 4), AnchorSolver.runPosition(slots, 7))
+    }
+
+    @Test
+    fun `a uniform cycle is one run the length of the cycle`() {
+        val slots = listOf("d", "d", "d")
+        repeat(3) { assertEquals(AnchorSolver.RunPosition(1, 3), AnchorSolver.runPosition(slots, it)) }
+    }
+
+    @Test
+    fun `run position stays inside the cycle for every slot`() {
+        val rnd = Random(SEED)
+        repeat(5_000) {
+            val slots = randomSlots(rnd)
+            slots.indices.forEach { index ->
+                val run = AnchorSolver.runPosition(slots, index)
+                assertTrue(run.position in 1..run.length, "position ${run.position} of ${run.length}")
+                assertTrue(run.length in 1..slots.size, "run ${run.length} exceeds cycle ${slots.size}")
+            }
+        }
+    }
+
     @Test
     fun `rejects an empty cycle`() {
         assertFailsWith<IllegalArgumentException> {

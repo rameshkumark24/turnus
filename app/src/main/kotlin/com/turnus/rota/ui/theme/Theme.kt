@@ -63,6 +63,8 @@ object TurnusTokens {
     /** Grid metrics, kept here so the month and year views cannot drift apart. */
     val CellCorner = 7.dp
     val CellGap = 3.dp
+    /** Cell width divided by height. Slightly taller than square, to fit a day number above a shift code. */
+    val CellAspect = 0.82f
     val ScreenPadding = 14.dp
 }
 

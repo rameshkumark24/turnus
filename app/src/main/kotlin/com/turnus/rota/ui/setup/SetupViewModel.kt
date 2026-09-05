@@ -40,7 +40,37 @@ data class AnchorCandidate(
     val slotIndex: Int,
     val anchor: DayNumber,
     val preview: List<String?>,
-)
+    /** Where today sits in its unbroken run, e.g. the 2nd of 4 days on. */
+    val runPosition: AnchorSolver.RunPosition,
+    val isWorking: Boolean,
+) {
+    /**
+     * The label that actually distinguishes one candidate from another.
+     *
+     * Four cards all reading "starting today" force a user to compare strips of
+     * coloured squares. "Your 2nd of 4 days on" is something they know about
+     * their own week without looking at anything.
+     */
+    val label: String
+        get() = buildString {
+            append("Your ")
+            append(ordinal(runPosition.position))
+            append(" of ")
+            append(runPosition.length)
+            append(if (isWorking) " days on" else " days off")
+        }
+}
+
+private fun ordinal(value: Int): String {
+    val suffix = when {
+        value % 100 in 11..13 -> "th"
+        value % 10 == 1 -> "st"
+        value % 10 == 2 -> "nd"
+        value % 10 == 3 -> "rd"
+        else -> "th"
+    }
+    return "$value$suffix"
+}
 
 data class SetupUiState(
     val step: SetupStep = SetupStep.Welcome,
@@ -199,6 +229,8 @@ class SetupViewModel(
                     slotIndex = candidate.slotIndex,
                     anchor = candidate.anchor,
                     preview = AnchorSolver.previewFrom(current.slots, candidate.slotIndex),
+                    runPosition = AnchorSolver.runPosition(current.slots, candidate.slotIndex),
+                    isWorking = shiftTypeId != null,
                 )
             }
 

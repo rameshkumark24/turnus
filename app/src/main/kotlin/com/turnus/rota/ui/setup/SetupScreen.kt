@@ -181,7 +181,8 @@ private fun BuildCustomStep(state: SetupUiState, viewModel: SetupViewModel) {
 
         // Wraps naturally at seven per row, so a fortnightly cycle reads as two
         // weeks rather than one long line.
-        state.slots.chunked(7).forEachIndexed { rowIndex, row ->
+        val rowWidth = rowWidthFor(state.cycleLength)
+        state.slots.chunked(rowWidth).forEachIndexed { rowIndex, row ->
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -189,7 +190,7 @@ private fun BuildCustomStep(state: SetupUiState, viewModel: SetupViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
             ) {
                 row.forEachIndexed { columnIndex, slot ->
-                    val index = rowIndex * 7 + columnIndex
+                    val index = rowIndex * rowWidth + columnIndex
                     SlotChip(
                         slot = slot,
                         styles = state.styleById,
@@ -199,7 +200,7 @@ private fun BuildCustomStep(state: SetupUiState, viewModel: SetupViewModel) {
                             .clickable { viewModel.cycleSlot(index) },
                     )
                 }
-                repeat(7 - row.size) { Spacer(Modifier.weight(1f)) }
+                repeat(rowWidth - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
 
@@ -259,9 +260,9 @@ private fun ChooseShiftTodayStep(state: SetupUiState, viewModel: SetupViewModel)
 @Composable
 private fun ResolveAmbiguityStep(state: SetupUiState, viewModel: SetupViewModel) {
     StepColumn(
-        title = "Which week is yours?",
-        subtitle = "That shift happens more than once in your cycle. Pick the row " +
-            "that matches the next seven days.",
+        title = "Where are you in your run?",
+        subtitle = "That shift comes round more than once in your cycle, so we need " +
+            "to know how far into it you are.",
     ) {
         state.candidates.forEach { candidate ->
             Card(
@@ -272,8 +273,10 @@ private fun ResolveAmbiguityStep(state: SetupUiState, viewModel: SetupViewModel)
                     .padding(vertical = 5.dp),
             ) {
                 Column(Modifier.padding(14.dp)) {
+                    Text(candidate.label, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(3.dp))
                     Text(
-                        "Starting today",
+                        "The next seven days",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -370,21 +373,38 @@ private fun StepColumn(
  */
 @Composable
 private fun SlotStrip(slots: List<String?>, styles: Map<String, ShiftStyle>) {
+    val width = rowWidthFor(slots.size)
     Column(verticalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap)) {
-        slots.chunked(7).forEach { week ->
+        slots.chunked(width).forEach { row ->
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
             ) {
-                week.forEach { slot ->
+                row.forEach { slot ->
                     SlotChip(slot, styles, Modifier.weight(1f).height(34.dp))
                 }
-                // Pads a short final week so its chips keep the same width as
-                // the rows above rather than stretching to fill.
-                repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                // Pads a short final row so its chips keep the same width as the
+                // rows above rather than stretching to fill.
+                repeat(width - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
+}
+
+/**
+ * How many chips to put on one row of a cycle preview.
+ *
+ * A rota cycle is not a week, so wrapping everything at seven is wrong: an
+ * 8-day cycle came out as a row of seven plus one orphan, which reads as a
+ * mistake rather than as a rhythm. Wrapping on a divisor of the cycle length
+ * shows each rota the way it is actually counted — 4-on-4-off as one row of
+ * eight, Pitman as two sevens, DuPont as four.
+ */
+private fun rowWidthFor(cycleLength: Int): Int = when {
+    cycleLength <= 8 -> cycleLength
+    cycleLength % 7 == 0 -> 7
+    cycleLength % 8 == 0 -> 8
+    else -> 7
 }
 
 @Composable

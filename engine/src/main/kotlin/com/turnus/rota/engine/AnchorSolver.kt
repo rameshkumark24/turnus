@@ -63,6 +63,44 @@ object AnchorSolver {
         }
     }
 
+    /**
+     * Where a slot sits inside its unbroken run of the same shift.
+     *
+     * @property position 1-based place in the run
+     * @property length how long the run is
+     */
+    data class RunPosition(val position: Int, val length: Int)
+
+    /**
+     * Answers "is today your first day on, or your third?"
+     *
+     * This is what makes the disambiguation question answerable. Four candidates
+     * that all say "starting today" force the user to compare four strips of
+     * coloured squares; "your 2nd of 4 days on" is something a person knows
+     * about their own week without looking at anything.
+     *
+     * Runs wrap around the end of the cycle, because a rota is a loop: a cycle
+     * ending in two Days and beginning with two more is a run of four.
+     */
+    fun runPosition(slots: List<String?>, index: Int): RunPosition {
+        require(slots.isNotEmpty()) { "a cycle needs at least one slot" }
+        require(index in slots.indices) { "index $index outside cycle of ${slots.size}" }
+
+        val value = slots[index]
+        val n = slots.size
+
+        // A cycle of one shift type has no boundary to count from.
+        if (slots.all { it == value }) return RunPosition(1, n)
+
+        var before = 0
+        while (slots[Math.floorMod(index - before - 1, n)] == value) before++
+
+        var after = 0
+        while (slots[Math.floorMod(index + after + 1, n)] == value) after++
+
+        return RunPosition(position = before + 1, length = before + after + 1)
+    }
+
     /** Builds the pattern a chosen [candidate] implies. */
     fun patternFor(
         candidate: Candidate,

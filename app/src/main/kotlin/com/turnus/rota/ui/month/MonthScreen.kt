@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -84,8 +84,10 @@ fun MonthScreen(viewModel: MonthViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Scaffold's inset padding already covers the status bar under
+                // edge-to-edge; adding statusBarsPadding on top double-counted it
+                // and left a visible gap above the month title.
                 .padding(padding)
-                .statusBarsPadding()
                 .padding(horizontal = TurnusTokens.ScreenPadding),
         ) {
             MonthHeader(
@@ -101,11 +103,11 @@ fun MonthScreen(viewModel: MonthViewModel) {
             WeekdayHeader(state)
             Spacer(Modifier.height(4.dp))
 
-            MonthGrid(
-                state = state,
-                onDayClick = viewModel::openDay,
-                modifier = Modifier.weight(1f),
-            )
+            MonthGrid(state = state, onDayClick = viewModel::openDay)
+
+            // Takes the slack so the grid keeps its natural proportions and the
+            // banner stays pinned to the bottom rather than the cells stretching.
+            Spacer(Modifier.weight(1f))
 
             // The anchored banner slot lands here. Its height is reserved from
             // the start so the grid never jumps when an ad fills or fails.
@@ -222,9 +224,7 @@ private fun MonthGrid(
     ) {
         repeat(MonthViewModel.WEEKS) { week ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
             ) {
                 repeat(7) { column ->
@@ -234,9 +234,13 @@ private fun MonthGrid(
                         cell = cell,
                         state = state,
                         onClick = onDayClick,
+                        // A fixed shape rather than filling the column height.
+                        // Weight-filling six rows into a tall screen stretched
+                        // every cell to roughly 2:1, which reads as a bar chart
+                        // rather than a calendar.
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxSize(),
+                            .aspectRatio(TurnusTokens.CellAspect),
                     )
                 }
             }
