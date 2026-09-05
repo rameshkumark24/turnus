@@ -12,7 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.ui.RootState
 import com.turnus.rota.ui.RootViewModel
@@ -56,7 +60,14 @@ class MainActivity : ComponentActivity() {
  */
 @Composable
 private fun TurnusApp(repository: RotaRepository) {
-    val rootViewModel = remember { RootViewModel(repository) }
+    // viewModel(), not remember: a remembered instance never enters a
+    // ViewModelStore, so onCleared never runs and viewModelScope is never
+    // cancelled. Every rotation, theme switch or font-size change would leave
+    // another RootViewModel collecting the pattern table forever — and would
+    // restart the setup wizard from the top, throwing away a built cycle.
+    val rootViewModel: RootViewModel = viewModel(
+        factory = remember(repository) { turnusViewModelFactory(repository) },
+    )
     val state by rootViewModel.state.collectAsStateWithLifecycle()
 
     when (state) {
@@ -65,13 +76,30 @@ private fun TurnusApp(repository: RotaRepository) {
         RootState.Loading -> Box(Modifier.fillMaxSize())
 
         RootState.NeedsSetup -> {
-            val setupViewModel = remember { SetupViewModel(repository) }
+            val setupViewModel: SetupViewModel = viewModel(
+                factory = remember(repository) { turnusViewModelFactory(repository) },
+            )
             SetupScreen(setupViewModel, onComplete = { /* state flips on save */ })
         }
 
         RootState.Ready -> {
-            val monthViewModel = remember { MonthViewModel(repository) }
+            val monthViewModel: MonthViewModel = viewModel(
+                factory = remember(repository) { turnusViewModelFactory(repository) },
+            )
             MonthScreen(monthViewModel)
         }
     }
 }
+
+/**
+ * One factory for the three ViewModels the app has.
+ *
+ * A DI framework would be a dependency, a compile step and a layer of
+ * indirection to build a graph this small.
+ */
+private fun turnusViewModelFactory(repository: RotaRepository): ViewModelProvider.Factory =
+    viewModelFactory {
+        initializer { RootViewModel(repository) }
+        initializer { SetupViewModel(repository) }
+        initializer { MonthViewModel(repository) }
+    }

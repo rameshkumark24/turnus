@@ -24,11 +24,19 @@ interface ShiftTypeDao {
     @Query("SELECT COUNT(*) FROM shift_type")
     suspend fun count(): Int
 
+    /** Null when the table is empty. Used to append rather than reusing an index. */
+    @Query("SELECT MAX(sort_order) FROM shift_type")
+    suspend fun maxSortOrder(): Int?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(shiftType: ShiftTypeEntity)
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertAll(shiftTypes: List<ShiftTypeEntity>)
+    /**
+     * IGNORE, not ABORT: seeding can be attempted from more than one place at
+     * startup, and losing that race must be a no-op rather than a crash.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIgnoring(shiftTypes: List<ShiftTypeEntity>)
 
     @Update
     suspend fun update(shiftType: ShiftTypeEntity)

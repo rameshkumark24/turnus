@@ -51,6 +51,7 @@ fun MonthScreen(viewModel: MonthViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheet by viewModel.sheet.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Undo is the safety net for the day editor: an accidental tap rewrites a
@@ -67,6 +68,13 @@ fun MonthScreen(viewModel: MonthViewModel) {
         } else {
             viewModel.clearUndo()
         }
+    }
+
+    // Repository failures are reported rather than swallowed or fatal.
+    LaunchedEffect(error) {
+        val message = error ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Long)
+        viewModel.clearError()
     }
 
     Scaffold(
@@ -112,7 +120,7 @@ fun MonthScreen(viewModel: MonthViewModel) {
             onChoose = viewModel::applyOverride,
             onRestore = viewModel::restoreScheduled,
             onNoteChange = viewModel::updateNote,
-            onSaveNote = viewModel::saveNoteOnly,
+            onSaveNote = viewModel::saveNote,
             onDismiss = viewModel::closeSheet,
         )
     }
@@ -269,9 +277,9 @@ private fun DayCell(
         append(date.format(CELL_ANNOUNCE))
         append(", ")
         append(style?.name ?: "off")
-        // "Edited" rather than "changed": the marker also covers a day whose
-        // shift still matches the pattern but which carries a note.
-        if (cell.isOverridden) append(", edited")
+        // The dot means the SHIFT changed: note-only rows are filtered out
+        // before the engine sees them, so they never reach a ResolvedDay.
+        if (cell.isOverridden) append(", changed")
         if (isToday) append(", today")
     }
 

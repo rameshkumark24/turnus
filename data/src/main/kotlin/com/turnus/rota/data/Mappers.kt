@@ -45,8 +45,12 @@ internal fun ShiftTypeEntity.toDefinition(): ShiftDefinition = ShiftDefinition(
 )
 
 /**
- * A row present with a null `shift_type_id` means the user explicitly took a
- * working day off — which [Overrides] keeps distinct from having no row at all.
+ * Only rows that actually change the shift reach the engine.
+ *
+ * A note-only row is deliberately dropped here: the day still follows the
+ * pattern, so handing it to [Overrides] would pin it. Among the rows that do
+ * count, a null `shift_type_id` means the user explicitly took a working day
+ * off — which [Overrides] keeps distinct from having no entry at all.
  */
 internal fun List<DayOverrideEntity>.toOverrides(): Overrides =
-    Overrides(associate { DayNumber(it.day) to it.shiftTypeId })
+    Overrides(filter { it.overridesShift }.associate { DayNumber(it.day) to it.shiftTypeId })

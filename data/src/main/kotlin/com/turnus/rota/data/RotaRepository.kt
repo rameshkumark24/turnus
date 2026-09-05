@@ -9,7 +9,7 @@ import com.turnus.rota.engine.ShiftCode
 import com.turnus.rota.engine.ShiftDefinition
 import com.turnus.rota.engine.ShiftEngine
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -52,6 +52,8 @@ data class ShiftStyle(
 data class DayOverrideDetail(
     val day: DayNumber,
     val shiftTypeId: String?,
+    /** False when the row carries only a note and the shift follows the pattern. */
+    val overridesShift: Boolean,
     val note: String?,
 )
 
@@ -65,8 +67,13 @@ data class DayOverrideDetail(
  * 2. Every shift id referenced by a pattern or an override exists.
  * 3. At most one pattern is active.
  *
- * Each is enforced on write and covered by tests. Nothing else in the app may
- * write these tables directly.
+ * Each is enforced on write, inside the same transaction as the write itself.
+ * Nothing else in the app may write these tables directly.
+ *
+ * These are NOT yet covered by tests: exercising them needs a real SQLite
+ * instance, which means either instrumentation on a device or Robolectric —
+ * neither of which the project has set up. That is a known gap, not an
+ * oversight, and it is why every check here is written to fail loudly.
  */
 class RotaRepository(
     private val db: TurnusDatabase,
@@ -133,7 +140,12 @@ class RotaRepository(
     suspend fun overrideFor(day: DayNumber): DayOverrideDetail? {
         val pattern = patterns.getActive() ?: return null
         return overrides.get(pattern.id, day.value)?.let {
-            DayOverrideDetail(day = DayNumber(it.day), shiftTypeId = it.shiftTypeId, note = it.note)
+            DayOverrideDetail(
+                day = DayNumber(it.day),
+                shiftTypeId = it.shiftTypeId,
+                overridesShift = it.overridesShift,
+                note = it.note,
+            )
         }
     }
 
@@ -147,12 +159,16 @@ class RotaRepository(
      *   blank cells the user cannot explain.
      */
     suspend fun saveActivePattern(pattern: Pattern) {
-        val known = shiftTypes.getAll().map { it.id }.toSet()
-        val missing = pattern.slots.filterNotNull().distinct().filterNot { it in known }
-        if (missing.isNotEmpty()) throw UnknownShiftTypeException(missing)
-
         val timestamp = now()
+        // The check and the write share a transaction. Validating outside it
+        // would let a shift type be deleted in between, leaving the pattern
+        // holding a dangling id that no foreign key can catch — slots is a
+        // delimited text column, so SQLite cannot police it.
         db.withTransaction {
+            val known = shiftTypes.getAll().map { it.id }.toSet()
+            val missing = pattern.slots.filterNotNull().distinct().filterNot { it in known }
+            if (missing.isNotEmpty()) throw UnknownShiftTypeException(missing)
+
             val existing = patterns.getById(pattern.id)
             patterns.deactivateAll()
             patterns.upsert(
@@ -179,21 +195,63 @@ class RotaRepository(
      * off, which is not the same as clearing the override.
      */
     suspend fun setOverride(day: DayNumber, shiftTypeId: String?, note: String? = null) {
-        val pattern = patterns.getActive() ?: return
-        if (shiftTypeId != null && shiftTypes.getById(shiftTypeId) == null) {
-            throw UnknownShiftTypeException(listOf(shiftTypeId))
-        }
         val timestamp = now()
-        overrides.upsert(
-            DayOverrideEntity(
-                patternId = pattern.id,
-                day = day.value,
-                shiftTypeId = shiftTypeId,
-                note = note,
-                createdAt = timestamp,
-                updatedAt = timestamp,
-            ),
-        )
+        db.withTransaction {
+            val pattern = patterns.getActive() ?: return@withTransaction
+            if (shiftTypeId != null && shiftTypes.getById(shiftTypeId) == null) {
+                throw UnknownShiftTypeException(listOf(shiftTypeId))
+            }
+            val existing = overrides.get(pattern.id, day.value)
+            overrides.upsert(
+                DayOverrideEntity(
+                    patternId = pattern.id,
+                    day = day.value,
+                    shiftTypeId = shiftTypeId,
+                    overridesShift = true,
+                    note = note,
+                    createdAt = existing?.createdAt ?: timestamp,
+                    updatedAt = timestamp,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Attaches a note without touching which shift the day is.
+     *
+     * A note must never pin the day: someone who annotates a fortnight and then
+     * corrects a rota that is running a day out would otherwise find every
+     * annotated day stranded on its old shift. If the day already has a real
+     * shift override, that is preserved; if not, the row is marked note-only
+     * and the engine ignores it.
+     *
+     * A blank note on a day with no shift override deletes the row rather than
+     * storing an exception that carries no information.
+     */
+    suspend fun setNote(day: DayNumber, note: String?) {
+        val timestamp = now()
+        db.withTransaction {
+            val pattern = patterns.getActive() ?: return@withTransaction
+            val existing = overrides.get(pattern.id, day.value)
+            val text = note?.takeIf { it.isNotBlank() }
+
+            if (text == null && existing?.overridesShift != true) {
+                overrides.delete(pattern.id, day.value)
+                return@withTransaction
+            }
+
+            overrides.upsert(
+                DayOverrideEntity(
+                    patternId = pattern.id,
+                    day = day.value,
+                    shiftTypeId = existing?.shiftTypeId.takeIf { existing?.overridesShift == true },
+                    overridesShift = existing?.overridesShift ?: false,
+                    note = text,
+                    createdAt = existing?.createdAt ?: timestamp,
+                    updatedAt = timestamp,
+                ),
+            )
+        }
     }
 
     /** Removes the exception, so the day falls back to the generated pattern. */
@@ -214,20 +272,25 @@ class RotaRepository(
         // Constructing the domain type first borrows its argument validation.
         ShiftDefinition(id, code, name, startMinute, durationMinute)
         val timestamp = now()
-        shiftTypes.insert(
-            ShiftTypeEntity(
-                id = id,
-                code = code,
-                name = name,
-                color = color,
-                startMinute = startMinute,
-                durationMinute = durationMinute,
-                isWorking = isWorking,
-                sortOrder = shiftTypes.count(),
-                createdAt = timestamp,
-                updatedAt = timestamp,
-            ),
-        )
+        db.withTransaction {
+            shiftTypes.insert(
+                ShiftTypeEntity(
+                    id = id,
+                    code = code,
+                    name = name,
+                    color = color,
+                    startMinute = startMinute,
+                    durationMinute = durationMinute,
+                    isWorking = isWorking,
+                    // MAX + 1, not count(): after any deletion a count would
+                    // reuse an index already held by a later row, and every
+                    // "ORDER BY sort_order" query would then be ambiguous.
+                    sortOrder = (shiftTypes.maxSortOrder() ?: -1) + 1,
+                    createdAt = timestamp,
+                    updatedAt = timestamp,
+                ),
+            )
+        }
         return id
     }
 
@@ -237,20 +300,25 @@ class RotaRepository(
      *   rather than just refusing.
      */
     suspend fun deleteShiftType(id: String) {
-        val row = shiftTypes.getById(id) ?: return
+        // Check and delete share a transaction, so a pattern cannot start
+        // referencing this shift between the two.
+        db.withTransaction {
+            val row = shiftTypes.getById(id) ?: return@withTransaction
 
-        // SQLite cannot enforce a foreign key into a delimited text column, so
-        // the pattern check happens here. Patterns are few; decoding them all
-        // is cheaper than any clever query and cannot go subtly wrong.
-        val usedBy = patterns.getAll()
-            .filter { id in SlotCodec.decode(it.slots) }
-            .map { it.name }
-        val overrideCount = overrides.countUsing(id)
+            // SQLite cannot enforce a foreign key into a delimited text column,
+            // so the pattern check happens here. Patterns are few; decoding
+            // them all is cheaper than any clever query and cannot go subtly
+            // wrong.
+            val usedBy = patterns.getAll()
+                .filter { id in SlotCodec.decode(it.slots) }
+                .map { it.name }
+            val overrideCount = overrides.countUsing(id)
 
-        if (usedBy.isNotEmpty() || overrideCount > 0) {
-            throw ShiftTypeInUseException(id, usedBy, overrideCount)
+            if (usedBy.isNotEmpty() || overrideCount > 0) {
+                throw ShiftTypeInUseException(id, usedBy, overrideCount)
+            }
+            shiftTypes.delete(row)
         }
-        shiftTypes.delete(row)
     }
 
     // ------------------------------------------------------------------ setup
@@ -262,8 +330,12 @@ class RotaRepository(
      * generated UUIDs: the built-in presets reference those ids, so a preset
      * chosen during setup resolves without any translation step.
      */
-    suspend fun seedDefaultsIfEmpty() {
-        if (shiftTypes.count() > 0) return
+    suspend fun seedDefaultsIfEmpty() = db.withTransaction {
+        // Transactional check-then-insert, and IGNORE on the insert. Startup
+        // calls this from more than one place; without both, two callers can
+        // each see an empty table and the loser's INSERT hits the unique code
+        // index and takes the process down on first launch.
+        if (shiftTypes.count() > 0) return@withTransaction
         val timestamp = now()
         var order = 0
         fun row(id: String, code: String, name: String, color: Int, start: Int, hours: Int) =
@@ -280,7 +352,7 @@ class RotaRepository(
                 updatedAt = timestamp,
             )
 
-        shiftTypes.insertAll(
+        shiftTypes.insertAllIgnoring(
             listOf(
                 row(ShiftCode.DAY, "D", "Day", COLOR_DAY, 7 * 60, 12),
                 row(ShiftCode.NIGHT, "N", "Night", COLOR_NIGHT, 19 * 60, 12),

@@ -10,6 +10,7 @@ import com.turnus.rota.engine.Pattern
 import com.turnus.rota.engine.Preset
 import com.turnus.rota.engine.Presets
 import com.turnus.rota.engine.ShiftEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,11 +51,14 @@ data class SetupUiState(
     val candidates: List<AnchorCandidate> = emptyList(),
     val anchor: DayNumber? = null,
     val saving: Boolean = false,
+    val cameFromBuilder: Boolean = false,
     val error: String? = null,
 ) {
     val cycleLength: Int get() = slots.size
     val workingDays: Int get() = slots.count { it != null }
-    val styleById: Map<String, ShiftStyle> get() = styles.associateBy { it.id }
+    // A val, not a computed get(): a fresh map on every read makes every
+    // SlotStrip see an unequal parameter, so Compose can skip nothing.
+    val styleById: Map<String, ShiftStyle> = styles.associateBy { it.id }
 
     /**
      * Fourteen days from the chosen reading, resolved through the real engine
@@ -99,7 +103,12 @@ class SetupViewModel(
             SetupStep.Welcome -> return false
             SetupStep.ChoosePattern -> SetupStep.Welcome
             SetupStep.BuildCustom -> SetupStep.ChoosePattern
-            SetupStep.ChooseShiftToday -> SetupStep.ChoosePattern
+            // Back into the builder when the cycle came from there. Routing to
+            // the preset list instead stranded a hand-built cycle: the only way
+            // back was the button that resets it, so minutes of tapping
+            // vanished with no warning.
+            SetupStep.ChooseShiftToday ->
+                if (current.cameFromBuilder) SetupStep.BuildCustom else SetupStep.ChoosePattern
             SetupStep.ResolveAmbiguity -> SetupStep.ChooseShiftToday
             SetupStep.Confirm -> SetupStep.ChooseShiftToday
         }
@@ -114,25 +123,30 @@ class SetupViewModel(
             step = SetupStep.ChooseShiftToday,
             patternName = preset.displayName,
             slots = preset.slots,
+            cameFromBuilder = false,
         )
     }
 
     fun startCustom() = _state.update {
         it.copy(
             step = SetupStep.BuildCustom,
-            patternName = "My rota",
-            // A sensible seed the user edits, rather than an empty screen with
-            // no clue what a "slot" is meant to be.
-            slots = List(8) { index -> if (index < 4) it.styles.firstOrNull()?.id else null },
+            cameFromBuilder = true,
+            patternName = it.patternName.ifBlank { "My rota" },
+            // Only seed an empty builder. Overwriting a cycle the user already
+            // built is destructive, and this is the route back into the builder.
+            slots = it.slots.ifEmpty {
+                List(8) { index -> if (index < 4) it.styles.firstOrNull()?.id else null }
+            },
         )
     }
 
     /** Cycles one slot through the shift types and then off, in order. */
     fun cycleSlot(index: Int) = _state.update { current ->
         val order = current.styles.map { it.id }
-        if (order.isEmpty()) return@update current
-        val slot = current.slots.getOrNull(index)
-        val next = when (slot) {
+        // Guard the write as well as the read: an index can be stale by the
+        // time it arrives if the cycle was shortened in between.
+        if (order.isEmpty() || index !in current.slots.indices) return@update current
+        val next = when (val slot = current.slots[index]) {
             null -> order.first()
             else -> {
                 val at = order.indexOf(slot)
@@ -220,7 +234,10 @@ class SetupViewModel(
         val anchor = current.anchor ?: return
         _state.update { it.copy(saving = true, error = null) }
         viewModelScope.launch {
-            runCatching {
+            // Not runCatching: it catches CancellationException too, which would
+            // report a cancelled scope as a failed save and touch state on a
+            // scope that is already going away.
+            try {
                 repository.saveActivePattern(
                     Pattern(
                         id = UUID.randomUUID().toString(),
@@ -229,9 +246,10 @@ class SetupViewModel(
                         slots = current.slots,
                     ),
                 )
-            }.onSuccess {
                 onDone()
-            }.onFailure { failure ->
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
                 _state.update {
                     it.copy(saving = false, error = failure.message ?: "Could not save your rota")
                 }

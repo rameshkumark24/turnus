@@ -3,8 +3,6 @@ package com.turnus.rota
 import android.app.Application
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.TurnusDatabase
-import com.turnus.rota.engine.DayNumber
-import com.turnus.rota.engine.Presets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

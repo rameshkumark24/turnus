@@ -78,8 +78,17 @@ data class PatternEntity(
  * `pattern_id` to the key now costs nothing while adding it later would be a
  * migration.
  *
- * A row whose `shift_type_id` is null means **explicitly off**, which is not
- * the same as having no row at all.
+ * Three states have to stay distinguishable, which takes two columns:
+ *
+ * - no row — the day follows the pattern
+ * - row, `overrides_shift = 1`, `shift_type_id` set — the shift was changed
+ * - row, `overrides_shift = 1`, `shift_type_id` null — explicitly taken off
+ * - row, `overrides_shift = 0` — a note only; the shift still follows the pattern
+ *
+ * Without the flag, attaching a note would have to pin the day's shift, and a
+ * later `shiftActivePatternBy` — the one-field fix for a misaligned rota that
+ * this whole design exists to make possible — would leave every annotated day
+ * stranded on its old shift.
  */
 @Entity(
     tableName = "day_override",
@@ -105,6 +114,8 @@ data class DayOverrideEntity(
     /** DayNumber. */
     val day: Long,
     @ColumnInfo(name = "shift_type_id") val shiftTypeId: String?,
+    /** False when this row carries only a note and the shift still follows the pattern. */
+    @ColumnInfo(name = "overrides_shift", defaultValue = "1") val overridesShift: Boolean,
     val note: String?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,

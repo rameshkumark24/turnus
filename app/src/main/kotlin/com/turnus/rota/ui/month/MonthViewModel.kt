@@ -7,6 +7,7 @@ import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.engine.ShiftEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +37,7 @@ data class DaySheetState(
     val scheduled: String?,
     val effective: String?,
     val isOverridden: Boolean,
+    val hasNote: Boolean,
     val note: String,
 )
 
@@ -44,6 +46,7 @@ data class UndoAction(
     val day: DayNumber,
     val hadOverride: Boolean,
     val previousShiftTypeId: String?,
+    val previousOverridesShift: Boolean,
     val previousNote: String?,
     val message: String,
 )
@@ -137,18 +140,48 @@ class MonthViewModel(
     private val _undo = MutableStateFlow<UndoAction?>(null)
     val undo: StateFlow<UndoAction?> = _undo.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     fun openDay(day: DayNumber) {
-        viewModelScope.launch {
-            val pattern = repository.activePattern() ?: return@launch
+        launchGuarded("Could not open that day") {
+            val pattern = repository.activePattern() ?: return@launchGuarded
             val stored = repository.overrideFor(day)
             val scheduled = ShiftEngine.scheduled(pattern, day)
             _sheet.value = DaySheetState(
                 day = day,
                 scheduled = scheduled,
-                effective = if (stored != null) stored.shiftTypeId else scheduled,
-                isOverridden = stored != null,
+                // A note-only row leaves the shift following the pattern, so
+                // the effective shift is the scheduled one.
+                effective = if (stored?.overridesShift == true) stored.shiftTypeId else scheduled,
+                isOverridden = stored?.overridesShift == true,
+                hasNote = !stored?.note.isNullOrBlank(),
                 note = stored?.note.orEmpty(),
             )
+        }
+    }
+
+    /**
+     * Runs repository work with the failure paths closed off.
+     *
+     * Room can raise a constraint violation from the day_override to shift_type
+     * foreign key, and the repository throws when a shift was deleted between
+     * the sheet opening and the tap. Uncaught inside a bare launch, either one
+     * takes the process down; the user loses their place for something that
+     * should have been a line of text.
+     *
+     * CancellationException is rethrown rather than reported — a cancelled
+     * scope is not a failure, and swallowing it breaks structured concurrency.
+     */
+    private fun launchGuarded(message: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                _error.value = failure.message ?: message
+            }
         }
     }
 
@@ -170,46 +203,60 @@ class MonthViewModel(
         repository.clearOverride(day)
     }
 
-    fun saveNoteOnly() = mutateDay("Note saved") { day, note ->
-        val current = _sheet.value
-        repository.setOverride(day, current?.effective, note.ifBlank { null })
+    /** Attaches a note without pinning the day's shift. */
+    fun saveNote() = mutateDay("Note saved") { day, note ->
+        repository.setNote(day, note)
     }
 
     /**
      * Every edit captures what was there first, so it can be put back exactly —
      * including the note. A mis-tap here silently rewrites someone's rota, and
      * they may not notice until the day arrives.
+     *
+     * The captured sheet is passed into the action rather than re-read inside
+     * it. Re-reading raced the sheet's own dismissal: a swipe-away during the
+     * in-flight database read left the action looking at a null sheet and
+     * writing the day as explicitly off.
      */
     private fun mutateDay(message: String, action: suspend (DayNumber, String) -> Unit) {
         val current = _sheet.value ?: return
-        viewModelScope.launch {
+        _sheet.value = null
+        launchGuarded("Could not save that change") {
             val before = repository.overrideFor(current.day)
             action(current.day, current.note)
             _undo.value = UndoAction(
                 day = current.day,
                 hadOverride = before != null,
                 previousShiftTypeId = before?.shiftTypeId,
+                previousOverridesShift = before?.overridesShift ?: false,
                 previousNote = before?.note,
                 message = message,
             )
-            _sheet.value = null
         }
     }
 
     fun performUndo() {
         val action = _undo.value ?: return
-        viewModelScope.launch {
-            if (action.hadOverride) {
-                repository.setOverride(action.day, action.previousShiftTypeId, action.previousNote)
-            } else {
-                repository.clearOverride(action.day)
+        _undo.value = null
+        launchGuarded("Could not undo that") {
+            when {
+                action.previousOverridesShift ->
+                    repository.setOverride(action.day, action.previousShiftTypeId, action.previousNote)
+                action.hadOverride ->
+                    // The row existed but only carried a note.
+                    repository.setNote(action.day, action.previousNote)
+                else ->
+                    repository.clearOverride(action.day)
             }
-            _undo.value = null
         }
     }
 
     fun clearUndo() {
         _undo.value = null
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 
     companion object {
@@ -226,7 +273,10 @@ class MonthViewModel(
          */
         fun gridRange(month: YearMonth, firstDayOfWeek: DayOfWeek): Pair<DayNumber, DayNumber> {
             val firstOfMonth: LocalDate = month.atDay(1)
-            val offset = ((firstOfMonth.dayOfWeek.value - firstDayOfWeek.value) + 7) % 7
+            // Math.floorMod, not %: CLAUDE.md rule 2. The old `+ 7` pre-bias
+            // happened to be safe, but it is exactly the fragile idiom the
+            // rule exists to ban.
+            val offset = Math.floorMod(firstOfMonth.dayOfWeek.value - firstDayOfWeek.value, 7)
             val start = firstOfMonth.minusDays(offset.toLong())
             return DayNumber.from(start) to DayNumber.from(start.plusDays((CELLS - 1).toLong()))
         }

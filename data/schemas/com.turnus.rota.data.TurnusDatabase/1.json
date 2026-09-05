@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "13aca6e45193ff54b91869c4d3e53768",
+    "identityHash": "4b3605efd1b104f70468db7e10b623f8",
     "entities": [
       {
         "tableName": "shift_type",
@@ -156,7 +156,7 @@
       },
       {
         "tableName": "day_override",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pattern_id` TEXT NOT NULL, `day` INTEGER NOT NULL, `shift_type_id` TEXT, `note` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`pattern_id`, `day`), FOREIGN KEY(`pattern_id`) REFERENCES `pattern`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`shift_type_id`) REFERENCES `shift_type`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pattern_id` TEXT NOT NULL, `day` INTEGER NOT NULL, `shift_type_id` TEXT, `overrides_shift` INTEGER NOT NULL DEFAULT 1, `note` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`pattern_id`, `day`), FOREIGN KEY(`pattern_id`) REFERENCES `pattern`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`shift_type_id`) REFERENCES `shift_type`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "patternId",
@@ -174,6 +174,13 @@
             "fieldPath": "shiftTypeId",
             "columnName": "shift_type_id",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "overridesShift",
+            "columnName": "overrides_shift",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
           },
           {
             "fieldPath": "note",
@@ -263,7 +270,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '13aca6e45193ff54b91869c4d3e53768')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4b3605efd1b104f70468db7e10b623f8')"
     ]
   }
 }

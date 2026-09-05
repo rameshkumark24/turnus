@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -289,14 +290,17 @@ private fun ResolveAmbiguityStep(state: SetupUiState, viewModel: SetupViewModel)
 @Composable
 private fun ConfirmStep(state: SetupUiState, viewModel: SetupViewModel, onComplete: () -> Unit) {
     val anchor = state.anchor
+    // Computed once. Calling confirmationPreview() per row read the clock twice,
+    // so a confirm screen left open across local midnight could render its first
+    // week from yesterday and its second from today.
+    val preview = remember(state.anchor, state.slots) { state.confirmationPreview() }
+
     StepColumn(
         title = "Does this look right?",
         subtitle = "The next two weeks, starting today. If it is out by a day you " +
             "can nudge it later without redoing any of this.",
     ) {
-        SlotStrip(state.confirmationPreview().take(7), state.styleById)
-        Spacer(Modifier.height(TurnusTokens.CellGap))
-        SlotStrip(state.confirmationPreview().drop(7), state.styleById)
+        SlotStrip(preview, state.styleById)
 
         Spacer(Modifier.height(16.dp))
         Text(
@@ -356,17 +360,30 @@ private fun StepColumn(
     }
 }
 
-/** A row of days, used for previews. Read-only. */
+/**
+ * A read-only preview of a cycle, wrapped a week per row.
+ *
+ * Wrapping is not cosmetic. DuPont and Panama are 28 days and Pitman is 14; laid
+ * out in one row on a 360dp screen each chip gets about nine points of width and
+ * the shift code disappears entirely — so the preview meant to help someone
+ * recognise their own rota would be unreadable for four of the seven presets.
+ */
 @Composable
 private fun SlotStrip(slots: List<String?>, styles: Map<String, ShiftStyle>) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
-    ) {
-        slots.forEach { slot ->
-            SlotChip(slot, styles, Modifier.weight(1f).height(34.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap)) {
+        slots.chunked(7).forEach { week ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
+            ) {
+                week.forEach { slot ->
+                    SlotChip(slot, styles, Modifier.weight(1f).height(34.dp))
+                }
+                // Pads a short final week so its chips keep the same width as
+                // the rows above rather than stretching to fill.
+                repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
-        repeat((7 - slots.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
     }
 }
 

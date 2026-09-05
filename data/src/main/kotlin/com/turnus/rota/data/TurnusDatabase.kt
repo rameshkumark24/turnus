@@ -1,6 +1,8 @@
 package com.turnus.rota.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -52,7 +54,7 @@ abstract class TurnusDatabase : RoomDatabase() {
             name: String = NAME,
             allowDestructive: Boolean = false,
         ): TurnusDatabase {
-            backUpBeforeMigration(context, name)
+            backUpIfMigrationPending(context, name)
             return Room.databaseBuilder(context.applicationContext, TurnusDatabase::class.java, name)
                 .addMigrations(*MIGRATIONS)
                 .apply { if (allowDestructive) fallbackToDestructiveMigration(dropAllTables = true) }
@@ -60,20 +62,52 @@ abstract class TurnusDatabase : RoomDatabase() {
         }
 
         /**
-         * Copies the database file to `<name>.pre-migration` when the stored
-         * schema version is older than the code's.
+         * Copies the database aside when, and only when, the file on disk is
+         * older than the schema this build expects.
          *
-         * Cheap insurance: the copy is overwritten on each successful upgrade,
-         * so at most one generation is kept, and it gives support a file to ask
-         * for when someone reports losing their rota after an update.
+         * The version check is the whole point. Copying on every open would
+         * overwrite the saved copy with the already-migrated file on the very
+         * next launch — destroying the one artifact worth having when someone
+         * reports losing their rota after an update.
+         *
+         * All three files are copied. Room runs in WAL mode from API 26, so
+         * committed transactions can still be sitting in `-wal`; taking the
+         * main file alone yields a backup silently missing the user's most
+         * recent edits.
+         *
+         * Failures are logged rather than swallowed: a copy that never happened
+         * must not look identical to one that did.
          */
-        private fun backUpBeforeMigration(context: Context, name: String) {
+        private fun backUpIfMigrationPending(context: Context, name: String) {
             val live = context.getDatabasePath(name)
             if (!live.exists()) return
+
+            val stored = runCatching {
+                SQLiteDatabase.openDatabase(live.path, null, SQLiteDatabase.OPEN_READONLY)
+                    .use { it.version }
+            }.getOrElse { failure ->
+                Log.w(TAG, "Could not read schema version; skipping pre-migration copy", failure)
+                return
+            }
+
+            if (stored >= SCHEMA_VERSION) return
+
             runCatching {
-                val backup = File(live.parentFile, "$name.pre-migration")
-                live.copyTo(backup, overwrite = true)
+                listOf("", "-wal", "-shm").forEach { suffix ->
+                    val source = File(live.path + suffix)
+                    if (source.exists()) {
+                        source.copyTo(File(live.path + suffix + BACKUP_SUFFIX), overwrite = true)
+                    }
+                }
+            }.onFailure { failure ->
+                Log.e(TAG, "Pre-migration backup failed for v$stored -> v$SCHEMA_VERSION", failure)
+            }.onSuccess {
+                Log.i(TAG, "Backed up database before migrating v$stored -> v$SCHEMA_VERSION")
             }
         }
+
+        private const val TAG = "TurnusDatabase"
+        private const val BACKUP_SUFFIX = ".pre-migration"
+        private const val SCHEMA_VERSION = 1
     }
 }
