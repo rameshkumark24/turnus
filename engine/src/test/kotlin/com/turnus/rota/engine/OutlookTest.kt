@@ -246,6 +246,98 @@ class OutlookTest {
         }
     }
 
+    // ----------------------------------------------------------- longest break
+
+    @Test
+    fun `finds the longest run of days off`() {
+        val pattern = Pattern(
+            "p", "4 on 4 off", DayNumber.of(2026, 9, 1),
+            Presets.FOUR_ON_FOUR_OFF.slots,
+        )
+        val days = ShiftEngine.resolveRange(
+            pattern, Overrides.EMPTY,
+            DayNumber.of(2026, 9, 1), DayNumber.of(2026, 9, 30),
+        )
+
+        val best = requireNotNull(Outlook.longestBreak(days))
+
+        assertEquals(4, best.length)
+        assertEquals(DayNumber.of(2026, 9, 5), best.start, "the first four-day break")
+        assertEquals(false, best.isWorking)
+        assertTrue(best.complete)
+    }
+
+    /** A break made longer by booked leave is exactly what this is for. */
+    @Test
+    fun `overrides can create the longest break`() {
+        val pattern = Pattern(
+            "p", "4 on 4 off", DayNumber.of(2026, 9, 1),
+            Presets.FOUR_ON_FOUR_OFF.slots,
+        )
+        // 5-8 and 13-16 are already off; 9-12 is the block of shifts between
+        // them. Booking those four off joins the two breaks into one.
+        val overrides = (9..12).fold(Overrides.EMPTY) { acc, d ->
+            acc.with(DayNumber.of(2026, 9, d), null)
+        }
+        val days = ShiftEngine.resolveRange(
+            pattern, overrides,
+            DayNumber.of(2026, 9, 1), DayNumber.of(2026, 9, 30),
+        )
+
+        val best = requireNotNull(Outlook.longestBreak(days))
+
+        assertEquals(12, best.length, "5-16 Sep becomes one twelve-day break")
+        assertEquals(DayNumber.of(2026, 9, 5), best.start)
+    }
+
+    /** A run touching the edge of the window may continue beyond it. */
+    @Test
+    fun `a break at the edge of the window is not complete`() {
+        val pattern = Pattern("p", "all off", DayNumber(0), listOf(null))
+        val days = ShiftEngine.resolveRange(
+            pattern, Overrides.EMPTY, DayNumber(100), DayNumber(110),
+        )
+
+        val best = requireNotNull(Outlook.longestBreak(days))
+
+        assertEquals(11, best.length)
+        assertEquals(false, best.complete, "length is only a lower bound here")
+    }
+
+    @Test
+    fun `a window with no days off has no break`() {
+        val pattern = Pattern("p", "always on", DayNumber(0), listOf("d"))
+        val days = ShiftEngine.resolveRange(
+            pattern, Overrides.EMPTY, DayNumber(100), DayNumber(110),
+        )
+
+        assertNull(Outlook.longestBreak(days))
+        assertNull(Outlook.longestBreak(emptyList()))
+    }
+
+    /** Whatever the rota, the reported break must really be all days off. */
+    @Test
+    fun `the reported break is genuinely unbroken and maximal`() {
+        forEachCase { pattern, overrides, day ->
+            val days = ShiftEngine.resolveRange(pattern, overrides, day, day + 120)
+            val best = Outlook.longestBreak(days) ?: return@forEachCase
+
+            val index = (best.start.value - day.value).toInt()
+            (0 until best.length).forEach { offset ->
+                assertTrue(!days[index + offset].isWorking, "a working day inside the break")
+            }
+            if (index > 0) assertTrue(days[index - 1].isWorking, "the break started earlier")
+            val after = index + best.length
+            if (after < days.size) assertTrue(days[after].isWorking, "the break ran on")
+
+            // No longer run exists anywhere in the window.
+            var run = 0
+            var longest = 0
+            days.forEach { if (it.isWorking) run = 0 else { run++; if (run > longest) longest = run } }
+            assertEquals(longest, best.length)
+        }
+    }
+
     // ----------------------------------------------------------------- driver
 
     private fun forEachCase(

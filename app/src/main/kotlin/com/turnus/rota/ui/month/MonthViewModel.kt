@@ -176,6 +176,11 @@ class MonthViewModel(
         visibleMonth.value = YearMonth.now()
     }
 
+    /** Used when a month is chosen from the year view. */
+    fun showMonth(month: YearMonth) {
+        visibleMonth.value = month
+    }
+
     // ------------------------------------------------------------- day editor
 
     private val _sheet = MutableStateFlow<DaySheetState?>(null)

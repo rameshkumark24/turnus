@@ -32,6 +32,8 @@ import com.turnus.rota.notify.ReminderScheduler
 import com.turnus.rota.ui.settings.SettingsScreen
 import com.turnus.rota.ui.settings.SettingsViewModel
 import com.turnus.rota.ui.setup.SetupViewModel
+import com.turnus.rota.ui.year.YearScreen
+import com.turnus.rota.ui.year.YearViewModel
 import com.turnus.rota.ui.theme.TurnusTheme
 import kotlinx.coroutines.launch
 
@@ -92,16 +94,15 @@ class MainActivity : ComponentActivity() {
  * completing setup *replaces* it, and pressing back from the calendar exits the
  * app rather than walking into onboarding. A navigation graph would give the
  * same result only by carefully suppressing its own back behaviour.
- *
- * A graph earns its place when the year view, settings and the day sheet land.
- * One destination does not need one.
  */
 @Composable
 private fun TurnusApp(repository: RotaRepository, onRotaChanged: () -> Unit) {
-    // Settings is the second destination, and still not enough to earn a
-    // navigation graph: one boolean expresses it exactly, and back is handled
-    // by the same BackHandler pattern the setup wizard already uses.
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    // Three destinations now, all siblings of the calendar rather than a stack.
+    // A navigation graph would buy argument passing and deep links, neither of
+    // which exists here, in exchange for a dependency and a back-behaviour
+    // override — the year and settings screens both return to the month, and
+    // nothing else.
+    var destination by rememberSaveable { mutableStateOf(Destination.Month) }
     // viewModel(), not remember: a remembered instance never enters a
     // ViewModelStore, so onCleared never runs and viewModelScope is never
     // cancelled. Every rotation, theme switch or font-size change would leave
@@ -124,28 +125,58 @@ private fun TurnusApp(repository: RotaRepository, onRotaChanged: () -> Unit) {
             SetupScreen(setupViewModel, onComplete = { /* state flips on save */ })
         }
 
-        RootState.Ready -> if (showSettings) {
-            val settingsViewModel: SettingsViewModel = viewModel(
-                factory = remember(repository) { turnusViewModelFactory(repository) },
-            )
-            BackHandler { showSettings = false }
-            SettingsScreen(
-                viewModel = settingsViewModel,
-                onBack = { showSettings = false },
-                // Reschedule as soon as a setting changes rather than waiting
-                // for onStop: someone who just turned reminders on and is
-                // watching the screen should not have to leave the app for it
-                // to take effect.
-                onRemindersChanged = onRotaChanged,
-            )
-        } else {
+        RootState.Ready -> {
+            // Hoisted above the branch so the year view can tell it which month
+            // to open. Obtained from the store either way, so this is the same
+            // instance the month screen was already using.
             val monthViewModel: MonthViewModel = viewModel(
                 factory = remember(repository) { turnusViewModelFactory(repository) },
             )
-            MonthScreen(monthViewModel, onOpenSettings = { showSettings = true })
+
+            when (destination) {
+                Destination.Month -> MonthScreen(
+                    viewModel = monthViewModel,
+                    onOpenSettings = { destination = Destination.Settings },
+                    onOpenYear = { destination = Destination.Year },
+                )
+
+                Destination.Year -> {
+                    val yearViewModel: YearViewModel = viewModel(
+                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                    )
+                    BackHandler { destination = Destination.Month }
+                    YearScreen(
+                        viewModel = yearViewModel,
+                        onOpenMonth = { month ->
+                            monthViewModel.showMonth(month)
+                            destination = Destination.Month
+                        },
+                        onBack = { destination = Destination.Month },
+                    )
+                }
+
+                Destination.Settings -> {
+                    val settingsViewModel: SettingsViewModel = viewModel(
+                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                    )
+                    BackHandler { destination = Destination.Month }
+                    SettingsScreen(
+                        viewModel = settingsViewModel,
+                        onBack = { destination = Destination.Month },
+                        // Reschedule as soon as a setting changes rather than
+                        // waiting for onStop: someone who just turned reminders
+                        // on and is watching the screen should not have to leave
+                        // the app for it to take effect.
+                        onRemindersChanged = onRotaChanged,
+                    )
+                }
+            }
         }
     }
 }
+
+/** The calendar's sibling screens. Not a stack — each one returns to the month. */
+private enum class Destination { Month, Year, Settings }
 
 /**
  * One factory for the three ViewModels the app has.
@@ -159,4 +190,5 @@ private fun turnusViewModelFactory(repository: RotaRepository): ViewModelProvide
         initializer { SetupViewModel(repository) }
         initializer { MonthViewModel(repository) }
         initializer { SettingsViewModel(repository) }
+        initializer { YearViewModel(repository) }
     }

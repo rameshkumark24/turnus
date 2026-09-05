@@ -101,6 +101,47 @@ object Outlook {
         )
     }
 
+    /**
+     * The longest unbroken run of days off inside an already-resolved range.
+     *
+     * This is the question a year view exists to answer — "when could I take a
+     * holiday?" — and it is worth computing rather than leaving someone to
+     * count squares, because the best break in a rota is usually the one that
+     * straddles a month boundary and is therefore the hardest to spot.
+     *
+     * Takes resolved days rather than a pattern so the caller can hand over
+     * exactly the window it is showing, overrides already applied. A run
+     * touching either end of [days] is reported with `complete = false`: it may
+     * continue outside the window, so its length is only a lower bound.
+     */
+    fun longestBreak(days: List<ResolvedDay>): Stretch? {
+        var best: Stretch? = null
+        var runStart = -1
+
+        fun close(endExclusive: Int) {
+            if (runStart < 0) return
+            val length = endExclusive - runStart
+            if (best == null || length > best!!.length) {
+                best = Stretch(
+                    start = days[runStart].day,
+                    length = length,
+                    shiftTypeId = null,
+                    isWorking = false,
+                    mixed = false,
+                    complete = runStart > 0 && endExclusive < days.size,
+                )
+            }
+            runStart = -1
+        }
+
+        days.forEachIndexed { index, day ->
+            if (day.isWorking) close(index) else if (runStart < 0) runStart = index
+        }
+        close(days.size)
+
+        return best
+    }
+
     private fun isWorking(pattern: Pattern, overrides: Overrides, day: DayNumber): Boolean =
         ShiftEngine.resolve(pattern, overrides, day) != null
 
