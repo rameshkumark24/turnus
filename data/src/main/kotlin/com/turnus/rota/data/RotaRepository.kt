@@ -2,6 +2,7 @@ package com.turnus.rota.data
 
 import androidx.room.withTransaction
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.Overrides
 import com.turnus.rota.engine.Pattern
 import com.turnus.rota.engine.ResolvedDay
@@ -122,6 +123,30 @@ class RotaRepository(
 
     fun observeOverrides(patternId: String): Flow<Overrides> =
         overrides.observeAllFor(patternId).map { it.toOverrides() }
+
+    /**
+     * The run [day] sits in and the one after it — "you are on nights until
+     * Sunday, then off for four".
+     *
+     * Loads exactly the window the scan can reach rather than every override
+     * ever recorded, because the answer is bounded by [horizonDays] in both
+     * directions and nothing outside that window can change it.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun observeOutlook(day: DayNumber, horizonDays: Int = 366): Flow<Outlook.Summary?> =
+        patterns.observeActive().flatMapLatest { patternRow ->
+            if (patternRow == null) {
+                flowOf(null)
+            } else {
+                overrides.observeRange(
+                    patternRow.id,
+                    (day - horizonDays.toLong()).value,
+                    (day + horizonDays.toLong()).value,
+                ).map { rows ->
+                    Outlook.summarise(patternRow.toDomain(), rows.toOverrides(), day, horizonDays)
+                }
+            }
+        }
 
     suspend fun activePattern(): Pattern? = patterns.getActive()?.toDomain()
 

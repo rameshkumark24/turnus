@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -41,10 +43,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.format.DateTimeFormatter
@@ -57,6 +61,7 @@ fun MonthScreen(viewModel: MonthViewModel) {
     val sheet by viewModel.sheet.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val outlook by viewModel.outlook.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Undo is the safety net for the day editor: an accidental tap rewrites a
@@ -110,13 +115,21 @@ fun MonthScreen(viewModel: MonthViewModel) {
 
             Spacer(Modifier.height(10.dp))
 
-            // Given all the remaining space rather than its natural size, so it
-            // can discover how much height it actually has to fit six weeks in.
-            MonthCalendar(
-                state = state,
-                onDayClick = viewModel::openDay,
-                modifier = Modifier.weight(1f),
-            )
+            // The grid needs to know its height budget to decide a cell size, so
+            // the viewport is measured here, outside the scroll — inside one,
+            // the available height is infinite and there is nothing to fit to.
+            BoxWithConstraints(Modifier.weight(1f)) {
+                val budget = maxHeight
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    MonthCalendar(
+                        state = state,
+                        onDayClick = viewModel::openDay,
+                        heightBudget = budget,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    NextShiftCard(outlook = outlook, styles = state.styles)
+                }
+            }
 
             // The anchored banner slot lands here. Its height is reserved from
             // the start so the grid never jumps when an ad fills or fails.
@@ -219,6 +232,7 @@ private fun TodaySummary(state: MonthUiState) {
 private fun MonthCalendar(
     state: MonthUiState,
     onDayClick: (DayNumber) -> Unit,
+    heightBudget: Dp,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -237,11 +251,18 @@ private fun MonthCalendar(
 
         val widthBoundCell = (maxWidth - gap * (COLUMNS - 1)) / COLUMNS
         val naturalHeight = widthBoundCell / TurnusTokens.CellAspect
-        val heightBudget = maxHeight - TurnusTokens.WeekdayRowHeight - gap * rows
+        val rowsBudget = heightBudget - TurnusTokens.WeekdayRowHeight - gap * rows
 
-        val heightBound = naturalHeight * rows > heightBudget
-        val cellHeight = if (heightBound) heightBudget / rows else naturalHeight
-        val cellWidth = if (heightBound) cellHeight * TurnusTokens.CellAspect else widthBoundCell
+        val heightBound = naturalHeight * rows > rowsBudget
+        // Never below the legibility floor. When the floor wins, the grid is
+        // taller than the space it was given and the screen scrolls — which is
+        // the only truthful outcome on a landscape phone.
+        val cellHeight =
+            if (heightBound) (rowsBudget / rows).coerceAtLeast(TurnusTokens.MinCellHeight)
+            else naturalHeight
+        val cellWidth =
+            if (heightBound) (cellHeight * TurnusTokens.CellAspect).coerceAtMost(widthBoundCell)
+            else widthBoundCell
 
         CompositionLocalProvider(LocalDensity provides gridDensity) {
             Column(
@@ -399,7 +420,125 @@ private fun DayCell(
     }
 }
 
+/**
+ * "When am I next off?" — or, on a rest day, "when am I next in?"
+ *
+ * The month grid can answer this, but only by counting coloured squares, and
+ * across a month boundary it cannot answer it at all. It also fills the space
+ * under a six-week grid, which is otherwise dead on a tall phone.
+ */
+@Composable
+private fun NextShiftCard(
+    outlook: Outlook.Summary?,
+    styles: Map<String, ShiftStyle>,
+    modifier: Modifier = Modifier,
+) {
+    // Nothing to show until the first emission, and nothing worth a placeholder
+    // either: a card that flashes skeleton text on every open is worse than one
+    // that arrives a frame late.
+    val summary = outlook ?: return
+    val copy = remember(summary, styles) { outlookCopy(summary, styles) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 13.dp)
+            // One announcement, not three fragments: a screen reader landing on
+            // "4 days off" with no idea when has been told nothing.
+            .semantics(mergeDescendants = true) { },
+    ) {
+        Text(
+            text = "NEXT",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = copy.headline,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        copy.detail?.let { detail ->
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private data class OutlookCopy(val headline: String, val detail: String?)
+
+/**
+ * Turns a run summary into the two lines the card shows.
+ *
+ * Kept out of the composable so the phrasing rules are readable in one place:
+ * the headline is always the date the state changes, and the detail is only
+ * ever facts that date does not already imply.
+ */
+private fun outlookCopy(
+    summary: Outlook.Summary,
+    styles: Map<String, ShiftStyle>,
+): OutlookCopy {
+    val current = summary.current
+    val next = summary.next
+    val daysAway = summary.daysUntilNext
+
+    // A rota with no day off inside a year, or none with a shift in one. Real
+    // only via overrides, but a blank card would be the worse answer.
+    if (next == null || daysAway == null) {
+        return OutlookCopy(
+            headline = if (current.isWorking) {
+                "No days off in the next year"
+            } else {
+                "No shifts in the next year"
+            },
+            detail = null,
+        )
+    }
+
+    val target = next.start.toLocalDate()
+    val whenPhrase = when {
+        daysAway == 1 -> "tomorrow"
+        // Inside the coming week a weekday name is unambiguous and reads faster
+        // than a date. Beyond it, "Thursday" could be any of several.
+        daysAway <= 6 -> target.format(WEEKDAY)
+        else -> target.format(SHORT_DATE)
+    }
+
+    val detail = buildList {
+        if (current.isWorking) {
+            if (next.complete) add("${days(next.length)} off")
+            // How many shifts are left in this run. Redundant when the change is
+            // tomorrow — the headline has already said "one, today".
+            val remaining = summary.position?.let { current.length - it } ?: 0
+            if (current.complete && remaining > 0) add("$remaining more to work")
+        } else {
+            // Only name a shift when the whole run is that shift; a run of two
+            // days then two nights is not "Day".
+            next.shiftTypeId
+                ?.takeUnless { next.mixed }
+                ?.let { styles[it]?.name }
+                ?.let { add(it) }
+            if (next.complete) add("${days(next.length)} on")
+        }
+    }
+
+    return OutlookCopy(
+        headline = if (current.isWorking) "Off from $whenPhrase" else "Back in $whenPhrase",
+        detail = detail.joinToString(" · ").ifBlank { null },
+    )
+}
+
+private fun days(count: Int): String = if (count == 1) "1 day" else "$count days"
+
 private const val COLUMNS = 7
 
 private val MONTH_TITLE: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL yyyy")
+private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE")
+private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 private val CELL_ANNOUNCE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM")

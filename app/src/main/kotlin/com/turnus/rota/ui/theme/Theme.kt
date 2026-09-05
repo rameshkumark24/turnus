@@ -70,6 +70,16 @@ object TurnusTokens {
     val WeekdayRowHeight = 22.dp
 
     /**
+     * Floor on a day cell's height, below which it stops being readable.
+     *
+     * A landscape phone has nowhere near the height for six weeks: shrinking to
+     * fit produced 30dp cells whose day numbers were clipped to a single digit,
+     * so "11" and "12" both read as "1". Better to keep the cells legible and
+     * let the screen scroll.
+     */
+    val MinCellHeight = 46.dp
+
+    /**
      * The "this is today" and "this is your current shift" ring.
      *
      * Inset rather than drawn on the edge, so the ring always has the cell's own

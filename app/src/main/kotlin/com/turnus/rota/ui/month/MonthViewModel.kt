@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.engine.ShiftEngine
 import kotlinx.coroutines.CancellationException
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -118,6 +120,28 @@ class MonthViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = MonthUiState.empty(),
+        )
+
+    /**
+     * The run today sits in and the one after it, for the card under the grid.
+     *
+     * Kept separate from [state] rather than folded into it because it does not
+     * depend on the visible month: paging to December must not change the answer
+     * to "when am I next off".
+     *
+     * `today` is read inside the flow, not captured once. Under
+     * `WhileSubscribed` the upstream is cancelled when the screen goes away and
+     * restarted when it comes back, so the date refreshes on return to the
+     * foreground — which is when someone who left the app open overnight looks
+     * at it again.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val outlook: StateFlow<Outlook.Summary?> = flow { emit(DayNumber.today()) }
+        .flatMapLatest { repository.observeOutlook(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null,
         )
 
     fun showPreviousMonth() {
