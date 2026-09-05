@@ -211,10 +211,16 @@ fun SettingsScreen(
 
                 if (!exactAllowed) {
                     Spacer(Modifier.height(10.dp))
+                    // "Up to an hour", not "a few minutes". On a real device the
+                    // system gives an inexact alarm a one-hour window, so
+                    // someone who asked for an hour's notice can be told as
+                    // their shift starts. Understating that would be the kind
+                    // of reassurance that makes a person miss work.
                     Warning(
-                        title = "Reminders may be a few minutes late",
-                        body = "Android is batching this app's alarms to save battery. " +
-                            "Reminders still arrive, but not always at the exact minute.",
+                        title = "Reminders may arrive late",
+                        body = "Android is batching this app's alarms to save battery, so a " +
+                            "reminder can arrive up to an hour after the time you asked for. " +
+                            "Allowing exact alarms gets them on time.",
                         action = "Allow exact alarms",
                         onAction = { context.openExactAlarmSettings() },
                     )
