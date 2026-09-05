@@ -5,6 +5,7 @@ import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.Overrides
 import com.turnus.rota.engine.Pattern
+import com.turnus.rota.engine.ReminderSettings
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.engine.ShiftCode
 import com.turnus.rota.engine.ShiftDefinition
@@ -71,10 +72,10 @@ data class DayOverrideDetail(
  * Each is enforced on write, inside the same transaction as the write itself.
  * Nothing else in the app may write these tables directly.
  *
- * These are NOT yet covered by tests: exercising them needs a real SQLite
- * instance, which means either instrumentation on a device or Robolectric —
- * neither of which the project has set up. That is a known gap, not an
- * oversight, and it is why every check here is written to fail loudly.
+ * All three are covered by instrumentation tests in `androidTest`, against real
+ * SQLite rather than a simulation of it — transactions, foreign keys and unique
+ * indexes are the things being checked, so testing them against an
+ * approximation would prove nothing.
  */
 class RotaRepository(
     private val db: TurnusDatabase,
@@ -85,6 +86,7 @@ class RotaRepository(
     private val shiftTypes = db.shiftTypeDao()
     private val patterns = db.patternDao()
     private val overrides = db.dayOverrideDao()
+    private val appMeta = db.appMetaDao()
 
     // ------------------------------------------------------------------ reads
 
@@ -147,6 +149,38 @@ class RotaRepository(
                 }
             }
         }
+
+    // -------------------------------------------------------------- reminders
+
+    fun observeReminderSettings(): Flow<ReminderSettings> =
+        appMeta.observeAll().map { rows -> ReminderSettingsCodec.decode(rows.associate { it.key to it.value }) }
+
+    suspend fun reminderSettings(): ReminderSettings =
+        ReminderSettingsCodec.decode(appMeta.getAll().associate { it.key to it.value })
+
+    suspend fun saveReminderSettings(settings: ReminderSettings) = db.withTransaction {
+        ReminderSettingsCodec.encode(settings).forEach { appMeta.put(it) }
+    }
+
+    /**
+     * Everything the scheduler needs, read once and consistently.
+     *
+     * Read as four separate calls the rota could change between them, and the
+     * alarms would then be set from a pattern that no longer matches the shift
+     * definitions they were timed against.
+     */
+    suspend fun reminderInputs(from: DayNumber, days: Int): ReminderInputs? = db.withTransaction {
+        val pattern = patterns.getActive()?.toDomain() ?: return@withTransaction null
+        ReminderInputs(
+            pattern = pattern,
+            overrides = overrides.getRange(pattern.id, from.value, (from + days.toLong()).value)
+                .toOverrides(),
+            definitions = shiftTypes.getAll()
+                .filter { it.isWorking }
+                .associate { it.id to it.toDefinition() },
+            settings = ReminderSettingsCodec.decode(appMeta.getAll().associate { it.key to it.value }),
+        )
+    }
 
     suspend fun activePattern(): Pattern? = patterns.getActive()?.toDomain()
 
@@ -394,3 +428,16 @@ class RotaRepository(
         const val COLOR_LATE = 0xFF7B5EA7.toInt()
     }
 }
+
+/**
+ * A consistent snapshot of everything a reminder schedule depends on.
+ *
+ * Bundled rather than fetched piecemeal so the alarms can never be built from a
+ * pattern and a set of shift definitions that were read either side of an edit.
+ */
+data class ReminderInputs(
+    val pattern: Pattern,
+    val overrides: Overrides,
+    val definitions: Map<String, ShiftDefinition>,
+    val settings: ReminderSettings,
+)

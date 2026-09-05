@@ -3,6 +3,8 @@ package com.turnus.rota
 import android.app.Application
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.TurnusDatabase
+import com.turnus.rota.notify.NotificationChannels
+import com.turnus.rota.notify.ReminderTopUpWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +19,11 @@ import kotlinx.coroutines.launch
  */
 class TurnusApplication : Application() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * For work that must finish even as the Activity goes away — rescheduling
+     * alarms when the user leaves the app is exactly that.
+     */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val database: TurnusDatabase by lazy {
         TurnusDatabase.build(
@@ -37,6 +43,16 @@ class TurnusApplication : Application() {
         //
         // No starter pattern: the app must never decide a user's rota for them.
         // With no pattern saved, the root routes to setup instead.
-        scope.launch { repository.seedDefaultsIfEmpty() }
+        applicationScope.launch { repository.seedDefaultsIfEmpty() }
+
+        // The channel must exist before the user goes looking for it in system
+        // settings, not only after a reminder has already fired once.
+        NotificationChannels.ensure(this)
+
+        // KEEP, so this is a no-op once enqueued. It is the backstop for the
+        // user who never opens the app: a settled rota gives them no reason to,
+        // and the alarm window would otherwise run out a month after their last
+        // visit.
+        ReminderTopUpWorker.enqueue(this)
     }
 }

@@ -118,4 +118,8 @@ interface AppMetaDao {
 
     @Query("SELECT * FROM app_meta")
     suspend fun getAll(): List<AppMetaEntity>
+
+    /** Adding a query changes no schema, so settings need no migration. */
+    @Query("SELECT * FROM app_meta")
+    fun observeAll(): Flow<List<AppMetaEntity>>
 }

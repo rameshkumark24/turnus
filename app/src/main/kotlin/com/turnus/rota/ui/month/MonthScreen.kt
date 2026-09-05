@@ -57,7 +57,7 @@ import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
 @Composable
-fun MonthScreen(viewModel: MonthViewModel) {
+fun MonthScreen(viewModel: MonthViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheet by viewModel.sheet.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
@@ -116,6 +116,7 @@ fun MonthScreen(viewModel: MonthViewModel) {
                 onPrevious = viewModel::showPreviousMonth,
                 onNext = viewModel::showNextMonth,
                 onToday = viewModel::showToday,
+                onOpenSettings = onOpenSettings,
             )
 
             TodaySummary(state)
@@ -163,6 +164,7 @@ private fun MonthHeader(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -179,6 +181,7 @@ private fun MonthHeader(
         TextButton(onClick = onToday) { Text("Today") }
         StepButton(label = "‹", description = "Previous month", onClick = onPrevious)
         StepButton(label = "›", description = "Next month", onClick = onNext)
+        StepButton(label = "⋮", description = "Settings", onClick = onOpenSettings)
     }
 }
 

@@ -1,0 +1,20 @@
+<!--
+  Status-bar icons are masked to a single colour and drawn small, so this is a
+  flat silhouette rather than the launcher mark. Anything with colour or fine
+  detail renders as an unreadable white blob at 24dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <!-- A calendar block: the outline, with the two hanging tabs. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,2h2v2h6V2h2v2h1c1.1,0 2,0.9 2,2v13c0,1.1 -0.9,2 -2,2H6c-1.1,0 -2,-0.9 -2,-2V6c0,-1.1 0.9,-2 2,-2h1V2zM6,9v10h12V9H6z" />
+    <!-- A filled day, so the mark still reads as "a date" at small sizes. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,11h4v4H8z" />
+</vector>
