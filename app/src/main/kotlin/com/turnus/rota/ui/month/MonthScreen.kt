@@ -2,6 +2,7 @@ package com.turnus.rota.ui.month
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +14,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.data.ShiftStyle
+import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.format.DateTimeFormatter
@@ -41,31 +49,72 @@ import java.util.Locale
 @Composable
 fun MonthScreen(viewModel: MonthViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val sheet by viewModel.sheet.collectAsStateWithLifecycle()
+    val undo by viewModel.undo.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = TurnusTokens.ScreenPadding),
-    ) {
-        MonthHeader(
-            title = state.yearMonth.format(MONTH_TITLE),
-            onPrevious = viewModel::showPreviousMonth,
-            onNext = viewModel::showNextMonth,
-            onToday = viewModel::showToday,
+    // Undo is the safety net for the day editor: an accidental tap rewrites a
+    // shift silently, and the user may not notice until that day arrives.
+    LaunchedEffect(undo) {
+        val action = undo ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = action.message,
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short,
         )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.performUndo()
+        } else {
+            viewModel.clearUndo()
+        }
+    }
 
-        TodaySummary(state)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .statusBarsPadding()
+                .padding(horizontal = TurnusTokens.ScreenPadding),
+        ) {
+            MonthHeader(
+                title = state.yearMonth.format(MONTH_TITLE),
+                onPrevious = viewModel::showPreviousMonth,
+                onNext = viewModel::showNextMonth,
+                onToday = viewModel::showToday,
+            )
 
-        Spacer(Modifier.height(10.dp))
-        WeekdayHeader(state)
-        Spacer(Modifier.height(4.dp))
+            TodaySummary(state)
 
-        MonthGrid(state, Modifier.weight(1f))
+            Spacer(Modifier.height(10.dp))
+            WeekdayHeader(state)
+            Spacer(Modifier.height(4.dp))
 
-        // The anchored banner slot lands here. Its height is reserved from the
-        // start so the grid never jumps when an ad fills or fails.
-        Spacer(Modifier.height(8.dp))
+            MonthGrid(
+                state = state,
+                onDayClick = viewModel::openDay,
+                modifier = Modifier.weight(1f),
+            )
+
+            // The anchored banner slot lands here. Its height is reserved from
+            // the start so the grid never jumps when an ad fills or fails.
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    sheet?.let { open ->
+        DaySheet(
+            sheet = open,
+            styles = state.styles,
+            onChoose = viewModel::applyOverride,
+            onRestore = viewModel::restoreScheduled,
+            onNoteChange = viewModel::updateNote,
+            onSaveNote = viewModel::saveNoteOnly,
+            onDismiss = viewModel::closeSheet,
+        )
     }
 }
 
@@ -154,7 +203,11 @@ private fun WeekdayHeader(state: MonthUiState) {
 }
 
 @Composable
-private fun MonthGrid(state: MonthUiState, modifier: Modifier = Modifier) {
+private fun MonthGrid(
+    state: MonthUiState,
+    onDayClick: (DayNumber) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
@@ -172,6 +225,7 @@ private fun MonthGrid(state: MonthUiState, modifier: Modifier = Modifier) {
                     DayCell(
                         cell = cell,
                         state = state,
+                        onClick = onDayClick,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxSize(),
@@ -183,7 +237,12 @@ private fun MonthGrid(state: MonthUiState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DayCell(cell: ResolvedDay?, state: MonthUiState, modifier: Modifier = Modifier) {
+private fun DayCell(
+    cell: ResolvedDay?,
+    state: MonthUiState,
+    onClick: (DayNumber) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     if (cell == null) {
         Box(modifier)
         return
@@ -210,7 +269,9 @@ private fun DayCell(cell: ResolvedDay?, state: MonthUiState, modifier: Modifier 
         append(date.format(CELL_ANNOUNCE))
         append(", ")
         append(style?.name ?: "off")
-        if (cell.isOverridden) append(", changed")
+        // "Edited" rather than "changed": the marker also covers a day whose
+        // shift still matches the pattern but which carries a note.
+        if (cell.isOverridden) append(", edited")
         if (isToday) append(", today")
     }
 
@@ -229,6 +290,7 @@ private fun DayCell(cell: ResolvedDay?, state: MonthUiState, modifier: Modifier 
                     Modifier
                 }
             )
+            .clickable { onClick(cell.day) }
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {

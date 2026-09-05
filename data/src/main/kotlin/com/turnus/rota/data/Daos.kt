@@ -83,6 +83,9 @@ interface DayOverrideDao {
     @Query("SELECT * FROM day_override ORDER BY pattern_id, day")
     suspend fun getAll(): List<DayOverrideEntity>
 
+    @Query("SELECT * FROM day_override WHERE pattern_id = :patternId AND day = :day")
+    suspend fun get(patternId: String, day: Long): DayOverrideEntity?
+
     @Query("SELECT COUNT(*) FROM day_override WHERE shift_type_id = :shiftTypeId")
     suspend fun countUsing(shiftTypeId: String): Int
 

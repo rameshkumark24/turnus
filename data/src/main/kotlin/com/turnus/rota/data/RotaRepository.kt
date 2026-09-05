@@ -48,6 +48,13 @@ data class ShiftStyle(
     val isWorking: Boolean,
 )
 
+/** A stored exception, as the day editor needs it. */
+data class DayOverrideDetail(
+    val day: DayNumber,
+    val shiftTypeId: String?,
+    val note: String?,
+)
+
 /**
  * The only way the app touches stored rota data.
  *
@@ -117,6 +124,18 @@ class RotaRepository(
     /** One-shot read, in display order, for flows that do not need to observe. */
     suspend fun shiftStyles(): List<ShiftStyle> =
         shiftTypes.getAll().map { ShiftStyle(it.id, it.code, it.name, it.color, it.isWorking) }
+
+    /**
+     * The stored exception for one day, or null when the day simply follows the
+     * pattern. Null here and a row whose shift is null are different answers —
+     * the second means the user deliberately took a working day off.
+     */
+    suspend fun overrideFor(day: DayNumber): DayOverrideDetail? {
+        val pattern = patterns.getActive() ?: return null
+        return overrides.get(pattern.id, day.value)?.let {
+            DayOverrideDetail(day = DayNumber(it.day), shiftTypeId = it.shiftTypeId, note = it.note)
+        }
+    }
 
     // ----------------------------------------------------------------- writes
 

@@ -6,18 +6,47 @@ import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.ResolvedDay
+import com.turnus.rota.engine.ShiftEngine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.WeekFields
 import java.util.Locale
+
+/**
+ * The open day editor.
+ *
+ * [scheduled] is what the pattern says; [effective] is what the calendar
+ * currently shows. They differ exactly when the day has been overridden, and
+ * keeping both is what lets the sheet offer "restore to Day shift" naming the
+ * real shift rather than a vague "reset".
+ */
+data class DaySheetState(
+    val day: DayNumber,
+    val scheduled: String?,
+    val effective: String?,
+    val isOverridden: Boolean,
+    val note: String,
+)
+
+/** Enough to put a day back exactly as it was, note included. */
+data class UndoAction(
+    val day: DayNumber,
+    val hadOverride: Boolean,
+    val previousShiftTypeId: String?,
+    val previousNote: String?,
+    val message: String,
+)
 
 data class MonthUiState(
     val yearMonth: YearMonth,
@@ -98,6 +127,89 @@ class MonthViewModel(
 
     fun showToday() {
         visibleMonth.value = YearMonth.now()
+    }
+
+    // ------------------------------------------------------------- day editor
+
+    private val _sheet = MutableStateFlow<DaySheetState?>(null)
+    val sheet: StateFlow<DaySheetState?> = _sheet.asStateFlow()
+
+    private val _undo = MutableStateFlow<UndoAction?>(null)
+    val undo: StateFlow<UndoAction?> = _undo.asStateFlow()
+
+    fun openDay(day: DayNumber) {
+        viewModelScope.launch {
+            val pattern = repository.activePattern() ?: return@launch
+            val stored = repository.overrideFor(day)
+            val scheduled = ShiftEngine.scheduled(pattern, day)
+            _sheet.value = DaySheetState(
+                day = day,
+                scheduled = scheduled,
+                effective = if (stored != null) stored.shiftTypeId else scheduled,
+                isOverridden = stored != null,
+                note = stored?.note.orEmpty(),
+            )
+        }
+    }
+
+    fun closeSheet() {
+        _sheet.value = null
+    }
+
+    fun updateNote(text: String) {
+        _sheet.update { it?.copy(note = text) }
+    }
+
+    /** Records a swap, sickness or overtime. A null [shiftTypeId] means off. */
+    fun applyOverride(shiftTypeId: String?) = mutateDay("Day changed") { day, note ->
+        repository.setOverride(day, shiftTypeId, note.ifBlank { null })
+    }
+
+    /** Drops the exception so the day follows the pattern again. */
+    fun restoreScheduled() = mutateDay("Restored to pattern") { day, _ ->
+        repository.clearOverride(day)
+    }
+
+    fun saveNoteOnly() = mutateDay("Note saved") { day, note ->
+        val current = _sheet.value
+        repository.setOverride(day, current?.effective, note.ifBlank { null })
+    }
+
+    /**
+     * Every edit captures what was there first, so it can be put back exactly —
+     * including the note. A mis-tap here silently rewrites someone's rota, and
+     * they may not notice until the day arrives.
+     */
+    private fun mutateDay(message: String, action: suspend (DayNumber, String) -> Unit) {
+        val current = _sheet.value ?: return
+        viewModelScope.launch {
+            val before = repository.overrideFor(current.day)
+            action(current.day, current.note)
+            _undo.value = UndoAction(
+                day = current.day,
+                hadOverride = before != null,
+                previousShiftTypeId = before?.shiftTypeId,
+                previousNote = before?.note,
+                message = message,
+            )
+            _sheet.value = null
+        }
+    }
+
+    fun performUndo() {
+        val action = _undo.value ?: return
+        viewModelScope.launch {
+            if (action.hadOverride) {
+                repository.setOverride(action.day, action.previousShiftTypeId, action.previousNote)
+            } else {
+                repository.clearOverride(action.day)
+            }
+            _undo.value = null
+        }
+    }
+
+    fun clearUndo() {
+        _undo.value = null
     }
 
     companion object {
