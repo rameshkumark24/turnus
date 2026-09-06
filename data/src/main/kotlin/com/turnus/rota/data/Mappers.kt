@@ -42,6 +42,7 @@ internal fun ShiftTypeEntity.toDefinition(): ShiftDefinition = ShiftDefinition(
     name = name,
     startMinute = startMinute,
     durationMinute = durationMinute,
+    breakMinutes = breakMinutes,
 )
 
 /**

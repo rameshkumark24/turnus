@@ -8,9 +8,16 @@ package com.turnus.rota.engine
  * check a payslip, plan overtime, and work out whether a swap leaves them
  * short. The days are already resolved; this is the arithmetic over them.
  *
- * ### Rostered minutes, not elapsed time
+ * ### Rostered minutes, less unpaid breaks
  *
- * A total here is the sum of each shift's *defined* duration. It is
+ * A total is the sum of each shift's defined length minus its unpaid break —
+ * see [ShiftDefinition.paidMinute]. Breaks matter more than they look: half an
+ * hour off a twelve-hour shift is seven or eight hours a month, always in the
+ * same direction, which is exactly the sort of error that gets believed.
+ *
+ * ### Rostered, not elapsed
+ *
+ * A total here is still built from each shift's *defined* length. It is
  * deliberately not the clock time that will elapse, and the difference is real:
  * twice a year, in any zone that observes it, a night shift crossing a daylight
  * saving boundary lasts eleven or thirteen hours rather than twelve.
@@ -78,8 +85,11 @@ object Hours {
         days.forEach { day ->
             val shiftTypeId = day.shiftTypeId ?: return@forEach
             shifts++
-            val duration = definitions[shiftTypeId]?.durationMinute
-            if (duration == null) untimed++ else minutes += duration
+            // Paid minutes, not the shift's whole length: an unpaid break is
+            // time at work that nobody is paid for, and a total that ignores it
+            // is over by the same amount every month.
+            val paid = definitions[shiftTypeId]?.paidMinute
+            if (paid == null) untimed++ else minutes += paid
         }
 
         return Total(shifts = shifts, minutes = minutes, untimedShifts = untimed)

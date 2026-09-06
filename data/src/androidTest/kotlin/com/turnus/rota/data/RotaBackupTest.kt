@@ -100,6 +100,32 @@ class RotaBackupTest {
         assertEquals(false, stored.overridesShift)
     }
 
+    /**
+     * A field added to the entity but forgotten in the restore mapping compiles
+     * fine — Kotlin fills it from the default — and then quietly drops the
+     * user's data. That happened to `break_minutes`, which would have moved
+     * every hours total on the first restore.
+     */
+    @Test
+    fun unpaidBreaksSurviveARoundTrip() = runBlocking {
+        seedRota()
+        repository.updateShiftType(
+            id = ShiftCode.DAY,
+            code = "D",
+            name = "Day",
+            color = 1,
+            startMinute = 7 * 60,
+            durationMinute = 12 * 60,
+            breakMinutes = 45,
+        )
+
+        repository.restore(roundTrip())
+
+        val restored = repository.shiftDefinitions().getValue(ShiftCode.DAY)
+        assertEquals(45, restored.breakMinutes)
+        assertEquals(12 * 60 - 45, restored.paidMinute)
+    }
+
     @Test
     fun auditTimestampsSurviveARestore() = runBlocking {
         seedRota()

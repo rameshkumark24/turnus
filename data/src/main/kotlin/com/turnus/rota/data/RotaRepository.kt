@@ -349,11 +349,12 @@ class RotaRepository(
         color: Int,
         startMinute: Int? = null,
         durationMinute: Int? = null,
+        breakMinutes: Int = 0,
         isWorking: Boolean = true,
         id: String = newId(),
     ): String {
         // Constructing the domain type first borrows its argument validation.
-        ShiftDefinition(id, code, name, startMinute, durationMinute)
+        ShiftDefinition(id, code, name, startMinute, durationMinute, breakMinutes)
         val timestamp = now()
         db.withTransaction {
             requireCodeIsFree(code, exceptId = null)
@@ -365,6 +366,7 @@ class RotaRepository(
                     color = color,
                     startMinute = startMinute,
                     durationMinute = durationMinute,
+                    breakMinutes = breakMinutes,
                     isWorking = isWorking,
                     // MAX + 1, not count(): after any deletion a count would
                     // reuse an index already held by a later row, and every
@@ -400,9 +402,10 @@ class RotaRepository(
         color: Int,
         startMinute: Int?,
         durationMinute: Int?,
+        breakMinutes: Int = 0,
     ) {
         // Borrows the domain type's validation before touching the database.
-        ShiftDefinition(id, code, name, startMinute, durationMinute)
+        ShiftDefinition(id, code, name, startMinute, durationMinute, breakMinutes)
         val timestamp = now()
         db.withTransaction {
             val existing = shiftTypes.getById(id) ?: throw UnknownShiftTypeException(listOf(id))
@@ -414,6 +417,7 @@ class RotaRepository(
                     color = color,
                     startMinute = startMinute,
                     durationMinute = durationMinute,
+                    breakMinutes = breakMinutes,
                     updatedAt = timestamp,
                 ),
             )
@@ -557,6 +561,7 @@ class RotaRepository(
                     color = it.color,
                     startMinute = it.startMinute,
                     durationMinute = it.durationMinute,
+                    breakMinutes = it.breakMinutes,
                     isWorking = it.isWorking,
                     sortOrder = it.sortOrder,
                     createdAtMillis = it.createdAt,
@@ -629,6 +634,7 @@ class RotaRepository(
                         color = it.color,
                         startMinute = it.startMinute,
                         durationMinute = it.durationMinute,
+                        breakMinutes = it.breakMinutes,
                         isWorking = it.isWorking,
                         sortOrder = it.sortOrder,
                         createdAt = stamp(it.createdAtMillis),

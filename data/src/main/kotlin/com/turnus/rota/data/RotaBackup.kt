@@ -63,6 +63,11 @@ object RotaBackup {
                             // the same thing here, and one of them reads better.
                             shift.startMinute?.let { put("startMinute", it) }
                             shift.durationMinute?.let { put("durationMinute", it) }
+                            // Omitted when zero, which is the overwhelming
+                            // majority, and read back as zero when absent — so
+                            // a file written before breaks existed still
+                            // restores correctly.
+                            if (shift.breakMinutes > 0) put("breakMinutes", shift.breakMinutes)
                             put("isWorking", shift.isWorking)
                             put("sortOrder", shift.sortOrder)
                             put("createdAtMillis", shift.createdAtMillis)
@@ -258,6 +263,7 @@ object RotaBackup {
             color = getInt("color"),
             startMinute = start,
             durationMinute = duration,
+            breakMinutes = optInt("breakMinutes", 0),
             isWorking = optBoolean("isWorking", true),
             sortOrder = optInt("sortOrder", 0),
             createdAtMillis = optLong("createdAtMillis", 0L),
@@ -328,6 +334,7 @@ data class BackupShiftType(
     val color: Int,
     val startMinute: Int?,
     val durationMinute: Int?,
+    val breakMinutes: Int,
     val isWorking: Boolean,
     val sortOrder: Int,
     val createdAtMillis: Long,

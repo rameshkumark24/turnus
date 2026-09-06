@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import java.io.File
 
 @Database(
@@ -15,7 +18,7 @@ import java.io.File
         DayOverrideEntity::class,
         AppMetaEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class TurnusDatabase : RoomDatabase() {
@@ -30,11 +33,28 @@ abstract class TurnusDatabase : RoomDatabase() {
         const val NAME: String = "turnus.db"
 
         /**
+         * Adds `break_minutes` to `shift_type`.
+         *
+         * Additive, with a default, and touching no existing value: every
+         * install that upgrades keeps its shifts exactly as they were, with a
+         * zero break, which is what those shifts have always effectively had.
+         * Nothing here can lose a row, which is the only property that matters
+         * in a migration that runs unattended on a stranger's phone.
+         */
+        internal val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE shift_type ADD COLUMN break_minutes INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
          * Every migration ever added goes in this array, and none is ever
          * removed. Users skip releases — someone will go from 1.0 straight to
          * 1.7 — so the chain has to be complete, not just adjacent.
          */
-        internal val MIGRATIONS: Array<androidx.room.migration.Migration> = emptyArray()
+        internal val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
 
         /**
          * Opens the database, taking a copy of the file first if a migration is
@@ -108,6 +128,6 @@ abstract class TurnusDatabase : RoomDatabase() {
 
         private const val TAG = "TurnusDatabase"
         private const val BACKUP_SUFFIX = ".pre-migration"
-        private const val SCHEMA_VERSION = 1
+        private const val SCHEMA_VERSION = 2
     }
 }

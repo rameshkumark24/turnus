@@ -281,13 +281,59 @@ private fun DraftSheet(
                         onChange { it.copy(durationMinute = (it.durationMinute + STEP).coerceAtMost(1440)) }
                     },
                 )
+                Spacer(Modifier.height(10.dp))
+                Stepper(
+                    label = "Unpaid break",
+                    value = if (draft.breakMinutes == 0) "None" else formatLength(draft.breakMinutes),
+                    onDown = {
+                        onChange {
+                            it.copy(breakMinutes = (it.breakMinutes - BREAK_STEP).coerceAtLeast(0))
+                        }
+                    },
+                    onUp = {
+                        onChange {
+                            // Never as long as the shift: a break equal to the
+                            // shift is a shift nobody works, and the engine
+                            // refuses it outright.
+                            it.copy(
+                                breakMinutes = (it.breakMinutes + BREAK_STEP)
+                                    .coerceAtMost((it.durationMinute - BREAK_STEP).coerceAtLeast(0)),
+                            )
+                        }
+                    },
+                )
+
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Ends " + formatMinutes((draft.startMinute + draft.durationMinute) % 1440) +
-                        if (draft.startMinute + draft.durationMinute >= 1440) " the next day" else "",
+                    text = buildString {
+                        append("Ends ")
+                        append(formatMinutes((draft.startMinute + draft.durationMinute) % 1440))
+                        if (draft.startMinute + draft.durationMinute >= 1440) append(" the next day")
+                        // Spelled out rather than left to arithmetic: the whole
+                        // reason breaks exist here is that people are checking
+                        // this figure against a payslip.
+                        if (draft.breakMinutes > 0) {
+                            append(" · counts as ")
+                            append(formatLength(draft.durationMinute - draft.breakMinutes))
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
+                if (!draft.isNew) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        // Because generated days are never stored, a shift's
+                        // times are applied to history as well as to the future.
+                        // Better said out loud than discovered by someone whose
+                        // last payslip stopped matching.
+                        text = "Changing these also changes the hours shown for " +
+                            "months you have already worked.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             Spacer(Modifier.height(20.dp))
@@ -340,6 +386,9 @@ private fun shift(minute: Int, by: Int): Int = Math.floorMod(minute + by, 1440)
 
 private const val STEP = 30
 
+/** Breaks come in quarter hours — 15, 20, 30, 45, 60 are what rotas actually use. */
+private const val BREAK_STEP = 15
+
 private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 private fun formatMinutes(minute: Int): String =
@@ -348,7 +397,13 @@ private fun formatMinutes(minute: Int): String =
 private fun formatLength(minutes: Int): String {
     val hours = minutes / 60
     val rest = minutes % 60
-    return if (rest == 0) "${hours}h" else "${hours}h ${rest}m"
+    return when {
+        // Breaks are usually under an hour, and "0h 30m" is a machine's way of
+        // saying "half an hour".
+        hours == 0 -> "${rest}m"
+        rest == 0 -> "${hours}h"
+        else -> "${hours}h ${rest}m"
+    }
 }
 
 private fun describe(shift: EditableShift): String = when {

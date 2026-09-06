@@ -99,7 +99,11 @@ Before uploading, run the checks that catch the things a release breaks:
   given is published on the listing.
 - **Target audience** — adults. Not a children's app, so no Families Policy.
 - **Store listing** — screenshots, a feature graphic, a short and full
-  description.
+  description. The description should say plainly that Turnus is a personal
+  planner and **not a record of hours worked**: the hours it shows are what the
+  pattern says, less unpaid breaks, and it knows nothing about overtime, a shift
+  someone covered, or an hour sent home early. The month card says the same
+  thing where the figure appears, and the two should agree.
 
 ## 6. After the first release
 

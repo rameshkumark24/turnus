@@ -18,6 +18,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // MigrationTestHelper reads the exported schemas at runtime, from the test
+    // APK's assets. Without this the schemas exist on disk and the migration
+    // test cannot see them, which fails in a way that reads like a missing
+    // migration rather than a missing asset.
+    sourceSets.getByName("androidTest") {
+        assets.srcDirs(files("$projectDir/schemas"))
+    }
 }
 
 kotlin {

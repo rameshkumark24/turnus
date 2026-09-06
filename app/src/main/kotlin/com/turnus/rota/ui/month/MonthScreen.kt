@@ -547,6 +547,18 @@ private fun HoursCard(state: MonthUiState, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            // The word that keeps this figure honest. It is what the pattern
+            // says, less unpaid breaks — not a record of hours worked, and not
+            // something to hold up in a pay dispute. Overtime nobody entered,
+            // an hour sent home early, a shift someone covered: the app knows
+            // none of it, and a number that looks like a timesheet will be
+            // treated as one.
+            text = "Rostered — not a record of what you worked",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         if (!hours.isComplete) {
             Spacer(Modifier.height(3.dp))
             Text(

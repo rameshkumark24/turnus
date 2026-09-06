@@ -42,6 +42,15 @@ data class ShiftTypeEntity(
     @ColumnInfo(name = "start_minute") val startMinute: Int?,
     /** 1..1440. May push past midnight — that is how night shifts are expressed. */
     @ColumnInfo(name = "duration_minute") val durationMinute: Int?,
+    /**
+     * Unpaid break inside the shift, deducted from hours totals only.
+     *
+     * `defaultValue` as well as a Kotlin default: the column is added by a
+     * migration to an existing table, and Room compares the schema it expects
+     * against the one on disk. Without the annotation matching the `ALTER
+     * TABLE`, every upgraded install fails its schema validation on first open.
+     */
+    @ColumnInfo(name = "break_minutes", defaultValue = "0") val breakMinutes: Int = 0,
     @ColumnInfo(name = "is_working") val isWorking: Boolean,
     @ColumnInfo(name = "sort_order") val sortOrder: Int,
     @ColumnInfo(name = "created_at") val createdAt: Long,

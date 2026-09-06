@@ -24,6 +24,7 @@ data class EditableShift(
     val color: Int,
     val startMinute: Int?,
     val durationMinute: Int?,
+    val breakMinutes: Int,
     val isWorking: Boolean,
 ) {
     val isTimed: Boolean get() = startMinute != null && durationMinute != null
@@ -37,6 +38,7 @@ data class ShiftDraft(
     val color: Int,
     val startMinute: Int,
     val durationMinute: Int,
+    val breakMinutes: Int,
     val timed: Boolean,
 ) {
     val isNew: Boolean get() = id == null
@@ -83,6 +85,7 @@ class ShiftEditorViewModel(
                     color = style.color,
                     startMinute = definition.startMinute,
                     durationMinute = definition.durationMinute,
+                    breakMinutes = definition.breakMinutes,
                     isWorking = style.isWorking,
                 )
             },
@@ -106,6 +109,7 @@ class ShiftEditorViewModel(
             // than zeros the user has to clear before they can type.
             startMinute = shift.startMinute ?: DEFAULT_START,
             durationMinute = shift.durationMinute ?: DEFAULT_DURATION,
+            breakMinutes = shift.breakMinutes,
             timed = shift.isTimed,
         )
     }
@@ -118,6 +122,7 @@ class ShiftEditorViewModel(
             color = NEW_COLOR,
             startMinute = DEFAULT_START,
             durationMinute = DEFAULT_DURATION,
+            breakMinutes = 0,
             timed = true,
         )
     }
@@ -146,6 +151,10 @@ class ShiftEditorViewModel(
             // is the pairing ShiftDefinition enforces.
             val start = current.startMinute.takeIf { current.timed }
             val duration = current.durationMinute.takeIf { current.timed }
+            // A shift with no times has no length for a break to come out of,
+            // and the engine refuses the pairing outright. Turning the times
+            // off has to drop the break with them rather than fail on save.
+            val breakMinutes = if (current.timed) current.breakMinutes else 0
 
             if (current.isNew) {
                 repository.createShiftType(
@@ -154,6 +163,7 @@ class ShiftEditorViewModel(
                     color = current.color,
                     startMinute = start,
                     durationMinute = duration,
+                    breakMinutes = breakMinutes,
                 )
             } else {
                 repository.updateShiftType(
@@ -163,6 +173,7 @@ class ShiftEditorViewModel(
                     color = current.color,
                     startMinute = start,
                     durationMinute = duration,
+                    breakMinutes = breakMinutes,
                 )
             }
             draft.value = null

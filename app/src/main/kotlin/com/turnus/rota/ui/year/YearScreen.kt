@@ -172,6 +172,9 @@ private fun YearSummary(state: YearUiState) {
                     if (hours.minutesPastTheHour != 0) {
                         append(" ").append(hours.minutesPastTheHour).append(" min")
                     }
+                    // Last, so it qualifies the whole figure rather than
+                    // wedging itself between the hours and the minutes.
+                    append(" rostered")
                     if (!hours.isComplete) append(", not counting shifts with no times")
                 },
                 style = MaterialTheme.typography.bodyMedium,
