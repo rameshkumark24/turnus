@@ -48,6 +48,49 @@ android {
         buildConfig = true
     }
 
+    /**
+     * Release signing, from `local.properties` or the environment.
+     *
+     * Nothing here names a file inside the repository, and the keystore itself
+     * is covered by `.gitignore`. A signing key committed once is committed
+     * forever — the history keeps it after the file is deleted — and for a Play
+     * app that means anyone can publish an update as you.
+     *
+     * The environment variables exist so a CI runner can sign without a
+     * `local.properties`; a developer machine uses the file. When neither is
+     * present the release build is left unsigned rather than failing, so
+     * `assembleRelease` still works for checking that R8 has not broken
+     * anything, which is what it is mostly used for here. `bundleRelease`
+     * warns instead — see the lifecycle check at the bottom of this file.
+     */
+    val keystoreFile = (
+        localProperties.getProperty("release.keystore")
+            ?: System.getenv("TURNUS_KEYSTORE")
+        )?.let(::file)?.takeIf(File::exists)
+
+    val keystorePassword = localProperties.getProperty("release.keystorePassword")
+        ?: System.getenv("TURNUS_KEYSTORE_PASSWORD")
+    val keyAlias = localProperties.getProperty("release.keyAlias")
+        ?: System.getenv("TURNUS_KEY_ALIAS")
+    val keyPassword = localProperties.getProperty("release.keyPassword")
+        ?: System.getenv("TURNUS_KEY_PASSWORD")
+
+    val canSign = keystoreFile != null &&
+        !keystorePassword.isNullOrBlank() &&
+        !keyAlias.isNullOrBlank() &&
+        !keyPassword.isNullOrBlank()
+
+    signingConfigs {
+        if (canSign) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Lets a debug build sit alongside a Play install on the same device.
@@ -67,6 +110,9 @@ android {
             )
         }
         release {
+            // Null when no key is configured: the build stays unsigned rather
+            // than failing, so R8 can still be exercised on any machine.
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -125,5 +171,16 @@ if (localProperties.getProperty("admob.appId").isNullOrBlank()) {
     logger.lifecycle(
         "Turnus: no admob.appId in local.properties - release builds will use " +
             "Google's TEST ad units and earn nothing.",
+    )
+}
+
+// The same warning for signing. An unsigned bundle cannot be uploaded to Play,
+// and finding that out at the upload screen wastes a four-minute build.
+if (localProperties.getProperty("release.keystore").isNullOrBlank() &&
+    System.getenv("TURNUS_KEYSTORE").isNullOrBlank()
+) {
+    logger.lifecycle(
+        "Turnus: no release.keystore in local.properties - release builds will " +
+            "be UNSIGNED and cannot be uploaded to Play. See docs/RELEASING.md.",
     )
 }
