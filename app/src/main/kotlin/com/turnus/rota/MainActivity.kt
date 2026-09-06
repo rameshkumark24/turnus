@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,22 +49,17 @@ class MainActivity : ComponentActivity() {
 
         val repository = (application as TurnusApplication).repository
 
-        // Consent first, then the SDK, then the remote switch. Started here
-        // rather than in Application because the consent form is a dialog and
-        // needs an Activity to show over.
-        AdGate.start(this) {
-            (application as TurnusApplication).applicationScope.launch {
-                AdGate.applyConfig(AdConfig.refresh(applicationContext))
-            }
-        }
-
         setContent {
             TurnusTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    TurnusApp(repository, onRotaChanged = ::syncReminders)
+                    TurnusApp(
+                        repository = repository,
+                        onRotaChanged = ::syncReminders,
+                        onCalendarShown = ::startAds,
+                    )
                 }
             }
         }
@@ -85,6 +81,27 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         syncReminders()
+    }
+
+    /**
+     * Asks for ad consent only once the calendar is on screen.
+     *
+     * Not in onCreate, where it used to be. In the EEA the consent form is a
+     * dense legal wall naming hundreds of ad partners, and putting it in front
+     * of someone who has not yet seen the app do a single useful thing is
+     * asking them to accept a stranger's terms sight unseen. Deferring it means
+     * the first thing a new user meets is the setup wizard, and the form only
+     * appears once they have a working rota in front of them.
+     *
+     * This is the same rule the notification permission already follows, and
+     * for the same reason: ask when the answer means something.
+     */
+    private fun startAds() {
+        AdGate.start(this) {
+            (application as TurnusApplication).applicationScope.launch {
+                AdGate.applyConfig(AdConfig.refresh(applicationContext))
+            }
+        }
     }
 
     private fun syncReminders() {
@@ -112,7 +129,11 @@ class MainActivity : ComponentActivity() {
  * same result only by carefully suppressing its own back behaviour.
  */
 @Composable
-private fun TurnusApp(repository: RotaRepository, onRotaChanged: () -> Unit) {
+private fun TurnusApp(
+    repository: RotaRepository,
+    onRotaChanged: () -> Unit,
+    onCalendarShown: () -> Unit,
+) {
     // Three destinations now, all siblings of the calendar rather than a stack.
     // A navigation graph would buy argument passing and deep links, neither of
     // which exists here, in exchange for a dependency and a back-behaviour
@@ -142,6 +163,12 @@ private fun TurnusApp(repository: RotaRepository, onRotaChanged: () -> Unit) {
         }
 
         RootState.Ready -> {
+            // Consent is asked for here, not at launch: by this point a rota
+            // exists and the calendar is on screen, so the user has seen what
+            // they are being asked to fund. Keyed on Unit so moving between
+            // the calendar, year and settings does not re-ask.
+            LaunchedEffect(Unit) { onCalendarShown() }
+
             // Hoisted above the branch so the year view can tell it which month
             // to open. Obtained from the store either way, so this is the same
             // instance the month screen was already using.
