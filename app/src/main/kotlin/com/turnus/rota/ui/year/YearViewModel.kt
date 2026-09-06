@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
+import com.turnus.rota.engine.ShiftDefinition
 import com.turnus.rota.ui.month.localeFirstDayOfWeek
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,8 @@ data class YearUiState(
     val start: DayNumber,
     val days: List<ResolvedDay>,
     val styles: Map<String, ShiftStyle>,
+    /** Carried for the hours total, which needs durations rather than colours. */
+    val definitions: Map<String, ShiftDefinition> = emptyMap(),
     val today: DayNumber,
     val loading: Boolean = false,
 ) {
@@ -42,6 +46,14 @@ data class YearUiState(
         days.getOrNull((day.value - start.value).toInt())
 
     val workingDays: Int get() = days.count(ResolvedDay::isWorking)
+
+    /**
+     * The year's rostered hours.
+     *
+     * Lazy for the same reason as [longestBreak]: it costs nothing until the
+     * summary card reads it, and is recomputed only when [days] changes.
+     */
+    val hours: Hours.Total by lazy { Hours.total(days, definitions) }
 
     /**
      * Computed here rather than in the flow so it costs nothing until something
@@ -86,7 +98,8 @@ class YearViewModel(
             combine(
                 repository.observeCalendar(start, end),
                 repository.observeShiftStyles(),
-            ) { days, styles ->
+                repository.observeShiftTypes(),
+            ) { days, styles, definitions ->
                 YearUiState(
                     year = year,
                     firstDayOfWeek = localeFirstDayOfWeek(currentLocale),
@@ -94,6 +107,7 @@ class YearViewModel(
                     start = start,
                     days = days,
                     styles = styles,
+                    definitions = definitions.associateBy { it.id },
                     today = DayNumber.today(),
                 )
             }

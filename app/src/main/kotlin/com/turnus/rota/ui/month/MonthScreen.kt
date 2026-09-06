@@ -50,9 +50,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.BannerSlot
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.ui.theme.TurnusTokens
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
@@ -142,6 +144,8 @@ fun MonthScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     NextShiftCard(outlook = outlook, styles = state.styles)
+                    Spacer(Modifier.height(10.dp))
+                    HoursCard(state)
                 }
             }
 
@@ -488,6 +492,90 @@ private fun NextShiftCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * What the visible month adds up to.
+ *
+ * The second question a rota gets asked, after "am I in tomorrow?": people
+ * check it against a payslip, decide whether to take an overtime shift, and
+ * work out what a swap costs them. Doing that by counting coloured squares is
+ * exactly the arithmetic a calendar should be doing for them.
+ *
+ * It follows the month on the title, not the calendar month, so paging forward
+ * answers the question for the month being looked at.
+ */
+@Composable
+private fun HoursCard(state: MonthUiState, modifier: Modifier = Modifier) {
+    val hours = state.hours
+    // Nothing to say about a month with no shifts in it, and an empty card
+    // saying "0 hours" is a worse answer than no card.
+    if (hours.shifts == 0) return
+
+    val label = remember(state.yearMonth, state.locale) {
+        if (state.yearMonth == YearMonth.now()) {
+            "THIS MONTH"
+        } else {
+            state.yearMonth.month
+                .getDisplayName(JavaTextStyle.FULL_STANDALONE, state.locale)
+                .uppercase(state.locale)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 13.dp)
+            .semantics(mergeDescendants = true) { },
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = buildString {
+                append(formatHours(hours))
+                append(" · ")
+                append(hours.shifts)
+                append(if (hours.shifts == 1) " shift" else " shifts")
+            },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (!hours.isComplete) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                // Said plainly rather than hidden: a total that is quietly
+                // short is worse than no total, because it will be trusted.
+                text = buildString {
+                    append(hours.untimedShifts)
+                    append(if (hours.untimedShifts == 1) " shift has" else " shifts have")
+                    append(" no times set, so they are not counted")
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * "168 hours", or "168 h 30 m" when a rota does not divide into whole hours.
+ *
+ * The minutes are dropped when they are zero because most rotas are whole
+ * hours, and "168 h 0 m" reads like a machine talking.
+ */
+private fun formatHours(total: Hours.Total): String = buildString {
+    append(total.wholeHours)
+    if (total.minutesPastTheHour == 0) {
+        append(if (total.wholeHours == 1) " hour" else " hours")
+    } else {
+        append(" h ").append(total.minutesPastTheHour).append(" m")
     }
 }
 

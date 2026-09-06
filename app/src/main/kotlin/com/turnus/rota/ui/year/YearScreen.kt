@@ -157,6 +157,27 @@ private fun YearSummary(state: YearUiState) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        // Hours on their own line rather than appended to the days: this is a
+        // different question — days off versus pay — and running them together
+        // makes one long line that reads as neither.
+        val hours = state.hours
+        if (hours.minutes > 0) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = buildString {
+                    append(hours.wholeHours)
+                    append(if (hours.wholeHours == 1) " hour" else " hours")
+                    // Only when it matters. A year is dominated by whole hours
+                    // and the odd half-shift does not deserve equal billing.
+                    if (hours.minutesPastTheHour != 0) {
+                        append(" ").append(hours.minutesPastTheHour).append(" min")
+                    }
+                    if (!hours.isComplete) append(", not counting shifts with no times")
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (best != null) {
             Spacer(Modifier.height(3.dp))
             Text(

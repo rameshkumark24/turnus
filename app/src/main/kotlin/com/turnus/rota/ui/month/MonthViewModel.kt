@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
+import com.turnus.rota.engine.ShiftDefinition
 import com.turnus.rota.engine.ShiftEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,11 +62,31 @@ data class MonthUiState(
     val locale: Locale,
     val days: List<ResolvedDay>,
     val styles: Map<String, ShiftStyle>,
+    /** Carried for the hours total, which needs durations rather than colours. */
+    val definitions: Map<String, ShiftDefinition> = emptyMap(),
     val today: DayNumber,
     val loading: Boolean = false,
 ) {
     /** The resolved cell for today, when today falls inside the visible grid. */
     val todayCell: ResolvedDay? get() = days.firstOrNull { it.day == today }
+
+    /**
+     * Hours for the month on the title, not for the grid.
+     *
+     * [days] runs from the first cell to the last and so carries the tail of
+     * the previous month and the head of the next — a total over all of it
+     * would be a number for no month in particular, and would be wrong by a
+     * shift or two in a way nobody could account for against a payslip.
+     *
+     * Lazy, so paging through months costs nothing until something reads it,
+     * and recomputed only when the state object itself changes.
+     */
+    val hours: Hours.Total by lazy {
+        Hours.total(
+            days.filter { YearMonth.from(it.day.toLocalDate()) == yearMonth },
+            definitions,
+        )
+    }
 
     companion object {
         fun empty(): MonthUiState {
@@ -125,13 +147,15 @@ class MonthViewModel(
             combine(
                 repository.observeCalendar(start, end),
                 repository.observeShiftStyles(),
-            ) { days, styles ->
+                repository.observeShiftTypes(),
+            ) { days, styles, definitions ->
                 MonthUiState(
                     yearMonth = month,
                     firstDayOfWeek = firstDay,
                     locale = currentLocale,
                     days = days,
                     styles = styles,
+                    definitions = definitions.associateBy { it.id },
                     today = DayNumber.today(),
                 )
             }
