@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.turnus.rota.ads.BannerSlot
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Outlook
@@ -144,9 +145,9 @@ fun MonthScreen(
                 }
             }
 
-            // The anchored banner slot lands here. Its height is reserved from
-            // the start so the grid never jumps when an ad fills or fails.
-            Spacer(Modifier.height(8.dp))
+            // Its height is reserved whether or not an ad ever arrives, so the
+            // calendar above never reflows under someone mid-tap.
+            BannerSlot()
         }
     }
 

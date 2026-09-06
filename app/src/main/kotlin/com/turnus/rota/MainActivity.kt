@@ -22,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.turnus.rota.ads.AdConfig
+import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.ui.RootState
 import com.turnus.rota.ui.RootViewModel
@@ -44,6 +46,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val repository = (application as TurnusApplication).repository
+
+        // Consent first, then the SDK, then the remote switch. Started here
+        // rather than in Application because the consent form is a dialog and
+        // needs an Activity to show over.
+        AdGate.start(this) {
+            (application as TurnusApplication).applicationScope.launch {
+                AdGate.applyConfig(AdConfig.refresh(applicationContext))
+            }
+        }
 
         setContent {
             TurnusTheme {

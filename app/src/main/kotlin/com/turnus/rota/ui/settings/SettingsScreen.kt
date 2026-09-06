@@ -1,6 +1,7 @@
 package com.turnus.rota.ui.settings
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
@@ -51,6 +52,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.ui.theme.TurnusTokens
 
@@ -241,9 +243,45 @@ fun SettingsScreen(
                 )
             }
 
+            // Outside the reminders block: consent has nothing to do with
+            // whether the user wants reminders, and burying the only way to
+            // withdraw it behind an unrelated switch would not be offering it.
+            val activity = remember(context) { context.findActivity() }
+            if (activity != null && remember(activity) { AdGate.privacyOptionsRequired(activity) }) {
+                Spacer(Modifier.height(18.dp))
+                Text("Privacy", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(10.dp))
+                Card {
+                    Text("Ad privacy choices", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Turnus is free because of the banner at the bottom of the " +
+                            "calendar. You can change what you agreed to at any time.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = { AdGate.showPrivacyOptions(activity) }) {
+                        Text("Change my choices")
+                    }
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/**
+ * The Activity behind a Compose context.
+ *
+ * The consent form is a dialog and cannot be shown from an application context,
+ * so this has to resolve to the real thing rather than assume it.
+ */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

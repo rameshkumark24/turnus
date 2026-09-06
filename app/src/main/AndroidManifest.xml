@@ -28,6 +28,24 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Turnus">
 
+        <!--
+          Required by the ads SDK, which crashes at startup if it is missing.
+          The value comes from a build-type placeholder: debug always gets
+          Google's test id, release gets the real one from local.properties.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+
+        <!--
+          The SDK otherwise starts fetching on first Activity launch, before the
+          user has been asked anything. Consent decides whether ads may be
+          requested at all, so initialisation waits for it.
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
