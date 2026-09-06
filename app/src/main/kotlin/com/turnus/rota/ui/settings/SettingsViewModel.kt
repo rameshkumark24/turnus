@@ -1,10 +1,13 @@
 package com.turnus.rota.ui.settings
 
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.ReminderSettings
+import com.turnus.rota.share.RotaExport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,6 +79,18 @@ class SettingsViewModel(
                 _error.value = failure.message ?: "Could not save that setting"
             }
         }
+    }
+
+    /**
+     * Builds the calendar file and returns the share intent.
+     *
+     * Returns rather than launches: starting an Activity needs a Context, and a
+     * ViewModel that holds one outlives the screen it came from.
+     */
+    suspend fun exportIcs(context: Context): Intent {
+        val uri = RotaExport.writeIcs(context, repository)
+        val name = repository.activePattern()?.name ?: "My rota"
+        return RotaExport.shareIntent(uri, name)
     }
 
     fun clearError() {

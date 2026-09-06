@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.ui.theme.TurnusTokens
+import kotlinx.coroutines.launch
 
 /** The lead times worth offering. More than this is a picker nobody wants. */
 private val LEAD_CHOICES = listOf(
@@ -78,6 +80,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
+    var exporting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var permissionAsked by rememberSaveable { mutableStateOf(false) }
     var notificationsAllowed by remember { mutableStateOf(notificationsAllowed(context)) }
     var exactAllowed by remember { mutableStateOf(exactAlarmsAllowed(context)) }
@@ -241,6 +245,41 @@ fun SettingsScreen(
                     action = "Open app settings",
                     onAction = { context.openAppSettings() },
                 )
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text("Share and export", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Send your rota to a calendar", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "A calendar file covering the next year. Open it in Google " +
+                        "Calendar, or send it to whoever needs to know when you work.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    enabled = !exporting,
+                    onClick = {
+                        exporting = true
+                        scope.launch {
+                            // Failures are shown, not swallowed: an export that
+                            // silently does nothing looks like a broken button.
+                            runCatching { viewModel.exportIcs(context) }
+                                .onSuccess { context.startActivity(it) }
+                                .onFailure {
+                                    snackbarHostState.showSnackbar(
+                                        it.message ?: "Could not export your rota",
+                                    )
+                                }
+                            exporting = false
+                        }
+                    },
+                ) {
+                    Text(if (exporting) "Preparing…" else "Export to calendar")
+                }
             }
 
             // Outside the reminders block: consent has nothing to do with

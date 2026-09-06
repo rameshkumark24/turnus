@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the export directory is shared, not the whole cache. A FileProvider path
+  wider than it needs to be hands every app the user shares with a route to
+  files that were never meant to leave.
+-->
+<paths>
+    <cache-path name="export" path="export/" />
+</paths>

@@ -57,6 +57,21 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Serves the exported .ics to whichever app the user picks from the
+          share sheet. Not exported: access is granted per-URI, per-share, and
+          expires — no other app can enumerate or read these files uninvited.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.export"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Not exported: only this app's own alarms may trigger it. -->
         <receiver
             android:name=".notify.ReminderReceiver"
