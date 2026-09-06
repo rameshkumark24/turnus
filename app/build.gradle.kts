@@ -29,6 +29,7 @@ fun adId(key: String, test: String): String =
 // Documented at developers.google.com/admob/android/test-ads
 val testAppId = "ca-app-pub-3940256099942544~3347511713"
 val testBannerId = "ca-app-pub-3940256099942544/9214589741"
+val testNativeId = "ca-app-pub-3940256099942544/2247696110"
 
 android {
     namespace = "com.turnus.rota"
@@ -55,6 +56,7 @@ android {
             // live ads while developing is how an AdMob account gets suspended.
             manifestPlaceholders["admobAppId"] = testAppId
             buildConfigField("String", "AD_BANNER_UNIT_ID", "\"$testBannerId\"")
+            buildConfigField("String", "AD_NATIVE_UNIT_ID", "\"$testNativeId\"")
             // The hashed id UMP logs on first run. Without it, setDebugGeography
             // is ignored on a real device and the EEA consent form — the one
             // that most needs testing — can never be seen from outside the EEA.
@@ -74,6 +76,11 @@ android {
                 "String",
                 "AD_BANNER_UNIT_ID",
                 "\"${adId("admob.bannerUnitId", testBannerId)}\"",
+            )
+            buildConfigField(
+                "String",
+                "AD_NATIVE_UNIT_ID",
+                "\"${adId("admob.nativeUnitId", testNativeId)}\"",
             )
         }
     }

@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.turnus.rota.ads.NativeSlot
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.LocalDate
@@ -114,8 +115,15 @@ fun YearScreen(
                     Spacer(Modifier.height(4.dp))
                     YearSummary(state)
 
-                    // The native ad slot goes here. Reserved from the start so
-                    // the grid never reflows when it fills or fails.
+                    // No reserved height, unlike the banner under the month
+                    // grid. That one sits above nothing, so a late fill would
+                    // shift the day a finger is already moving towards; this
+                    // one is the last thing in a scrolling column, so it can
+                    // appear late and move nothing. Reserving would only leave
+                    // a blank rectangle for everyone who declines consent or is
+                    // served nothing.
+                    Spacer(Modifier.height(8.dp))
+                    NativeSlot()
                     Spacer(Modifier.height(8.dp))
                 }
             }

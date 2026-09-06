@@ -55,6 +55,18 @@ object AdGate {
     /** True only once consent permits ads, the SDK is up, and the switch is on. */
     val bannersAllowed: StateFlow<Boolean> = _bannersAllowed.asStateFlow()
 
+    private val _nativeAllowed = MutableStateFlow(false)
+
+    /**
+     * The same three gates, switched separately.
+     *
+     * Separately because the two slots can fail separately: a native unit that
+     * starts serving something inappropriate next to someone's working year has
+     * to be killable without taking the banner — and the app's whole income —
+     * down with it.
+     */
+    val nativeAllowed: StateFlow<Boolean> = _nativeAllowed.asStateFlow()
+
     /**
      * Asks for consent if it is needed, then starts the SDK.
      *
@@ -120,6 +132,7 @@ object AdGate {
         if (!consentAllowsAds) {
             Log.i(TAG, "consent does not permit ads")
             _bannersAllowed.value = false
+            _nativeAllowed.value = false
             return
         }
         // initialize is idempotent, but the callback is not free and the
@@ -140,7 +153,9 @@ object AdGate {
      * this file with legal weight.
      */
     fun applyConfig(config: AdConfig.Values) {
-        _bannersAllowed.value = consentAllowsAds && initialised.get() && config.bannersEnabled
+        val permitted = consentAllowsAds && initialised.get()
+        _bannersAllowed.value = permitted && config.bannersEnabled
+        _nativeAllowed.value = permitted && config.nativeEnabled
     }
 
     /**
