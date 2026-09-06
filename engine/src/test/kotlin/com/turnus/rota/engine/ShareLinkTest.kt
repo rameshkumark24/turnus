@@ -18,24 +18,24 @@ class ShareLinkTest {
         val rnd = Random(SEED)
         repeat(5_000) {
             val original = randomPattern(rnd)
-            val decoded = ShareLink.decode(ShareLink.encode(original))
+            val decoded = ShareLink.decode(ShareLink.encode(original, defsFor(original)))
 
             val success = assertIs<ShareLinkResult.Success>(decoded, "failed for $original")
             assertEquals(original.anchor, success.anchor)
             assertEquals(original.name, success.name)
-            assertEquals(original.slots, success.slots)
+            assertEquals(original.slots, success.codes)
         }
     }
 
     @Test
     fun `round trips through a full url`() {
         val original = fourOnFourOff()
-        val url = ShareLink.url(original)
+        val url = ShareLink.url(original, defsFor(original), base = "https://example.test/r/")
         val token = ShareLink.tokenFrom(url)
 
         assertTrue(url.contains('#'), "the token must live in the fragment")
         val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(token!!))
-        assertEquals(original.slots, success.slots)
+        assertEquals(original.slots, success.codes)
     }
 
     /**
@@ -44,17 +44,17 @@ class ShareLinkTest {
      */
     @Test
     fun `puts the token after the hash and nothing before it`() {
-        val url = ShareLink.url(fourOnFourOff(), base = "https://turnus.app/r/")
-        assertEquals("https://turnus.app/r/", url.substringBefore('#'))
+        val url = fourOnFourOff().let { ShareLink.url(it, defsFor(it), base = "https://example.test/r/") }
+        assertEquals("https://example.test/r/", url.substringBefore('#'))
         assertTrue(url.substringAfter('#').startsWith("v1."))
     }
 
     @Test
     fun `assigns the caller's id rather than inventing one`() {
         val success = assertIs<ShareLinkResult.Success>(
-            ShareLink.decode(ShareLink.encode(fourOnFourOff())),
+            ShareLink.decode(fourOnFourOff().let { ShareLink.encode(it, defsFor(it)) }),
         )
-        assertEquals("local-id", success.toPattern("local-id").id)
+        assertEquals("local-id", success.toPattern("local-id") { it }.id)
     }
 
     // ---------------------------------------------------------------- awkward input
@@ -62,34 +62,34 @@ class ShareLinkTest {
     @Test
     fun `a name containing the field separator survives`() {
         val original = Pattern("p", "Days; nights; and ;;; more", DayNumber.of(2026, 5, 4), listOf("a", null))
-        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original)))
+        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original, defsFor(original))))
         assertEquals(original.name, success.name)
     }
 
     @Test
     fun `a unicode name survives`() {
         val original = Pattern("p", "Spätschicht — 夜勤 — Ærøskøbing", DayNumber.of(2026, 5, 4), listOf("a"))
-        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original)))
+        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original, defsFor(original))))
         assertEquals(original.name, success.name)
     }
 
     @Test
     fun `an all off pattern survives`() {
         val original = Pattern("p", "Career break", DayNumber.of(2026, 5, 4), listOf(null, null, null))
-        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original)))
-        assertEquals(listOf(null, null, null), success.slots)
+        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original, defsFor(original))))
+        assertEquals(listOf(null, null, null), success.codes)
     }
 
     @Test
     fun `an anchor far before the epoch survives`() {
         val original = Pattern("p", "old", DayNumber(-30_000), Presets.DUPONT.slots)
-        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original)))
+        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(ShareLink.encode(original, defsFor(original))))
         assertEquals(DayNumber(-30_000), success.anchor)
     }
 
     @Test
     fun `tolerates a leading hash and surrounding whitespace`() {
-        val token = ShareLink.encode(fourOnFourOff())
+        val token = fourOnFourOff().let { ShareLink.encode(it, defsFor(it)) }
         assertIs<ShareLinkResult.Success>(ShareLink.decode("  #$token  "))
     }
 
@@ -141,16 +141,16 @@ class ShareLinkTest {
     @Test
     fun `rejects more distinct shift types than the format can index`() {
         val tooMany = Pattern("p", "p", DayNumber(0), (0..36).map { "shift$it" })
-        assertFailsWith<IllegalArgumentException> { ShareLink.encode(tooMany) }
+        assertFailsWith<IllegalArgumentException> { ShareLink.encode(tooMany, defsFor(tooMany)) }
     }
 
     @Test
-    fun `rejects a shift id containing a separator`() {
+    fun `rejects a shift letter containing a separator`() {
         assertFailsWith<IllegalArgumentException> {
-            ShareLink.encode(Pattern("p", "p", DayNumber(0), listOf("a,b")))
+            Pattern("p", "p", DayNumber(0), listOf("a,b")).let { ShareLink.encode(it, defsFor(it)) }
         }
         assertFailsWith<IllegalArgumentException> {
-            ShareLink.encode(Pattern("p", "p", DayNumber(0), listOf("a;b")))
+            Pattern("p", "p", DayNumber(0), listOf("a;b")).let { ShareLink.encode(it, defsFor(it)) }
         }
     }
 
@@ -158,9 +158,8 @@ class ShareLinkTest {
 
     @Test
     fun `stays short enough to share in a message`() {
-        val token = ShareLink.encode(
-            Pattern("p", "DuPont", DayNumber.of(2026, 9, 4), Presets.DUPONT.slots),
-        )
+        val pattern = Pattern("p", "DuPont", DayNumber.of(2026, 9, 4), Presets.DUPONT.slots)
+        val token = ShareLink.encode(pattern, defsFor(pattern))
         assertTrue(token.length < 120, "token was ${token.length} chars: $token")
     }
 
@@ -168,7 +167,7 @@ class ShareLinkTest {
     fun `is url safe`() {
         val rnd = Random(SEED)
         repeat(500) {
-            val token = ShareLink.encode(randomPattern(rnd))
+            val token = randomPattern(rnd).let { ShareLink.encode(it, defsFor(it)) }
             assertTrue(
                 token.all { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' },
                 "token is not url safe: $token",
@@ -179,10 +178,87 @@ class ShareLinkTest {
     @Test
     fun `encoding is deterministic`() {
         val pattern = fourOnFourOff()
-        assertEquals(ShareLink.encode(pattern), ShareLink.encode(pattern))
+        assertEquals(ShareLink.encode(pattern, defsFor(pattern)), ShareLink.encode(pattern, defsFor(pattern)))
+    }
+
+    // ------------------------------------------------------- letters, not ids
+
+    /**
+     * The property the whole format exists for.
+     *
+     * Two installs generate different ids for the same shift, so a code built
+     * from ids would decode into shifts the receiver does not have. What
+     * travels is the letter on the calendar, which both people can see.
+     */
+    @Test
+    fun `travels as letters so a different install can read it`() {
+        val sender = Pattern(
+            id = "sender-pattern",
+            name = "Four on four off",
+            anchor = DayNumber.of(2026, 9, 4),
+            slots = listOf("uuid-aaa", "uuid-aaa", "uuid-bbb", null),
+        )
+        val senderShifts = mapOf(
+            "uuid-aaa" to ShiftDefinition("uuid-aaa", "D", "Day", 7 * 60, 12 * 60),
+            "uuid-bbb" to ShiftDefinition("uuid-bbb", "N", "Night", 19 * 60, 12 * 60),
+        )
+
+        val success = assertIs<ShareLinkResult.Success>(
+            ShareLink.decode(ShareLink.encode(sender, senderShifts)),
+        )
+
+        assertEquals(listOf("D", "D", "N", null), success.codes)
+        assertEquals(listOf("D", "N"), success.shiftCodes)
+
+        // The receiver has the same two letters under entirely different ids,
+        // and their own hours. Both are theirs to keep.
+        val receiverIds = mapOf("D" to "local-1", "N" to "local-2")
+        val imported = success.toPattern("receiver-pattern") { receiverIds.getValue(it) }
+
+        assertEquals(listOf("local-1", "local-1", "local-2", null), imported.slots)
+        assertEquals(sender.anchor, imported.anchor)
+        assertEquals("Four on four off", imported.name)
+    }
+
+    @Test
+    fun `refuses to encode a slot whose shift is unknown`() {
+        val pattern = Pattern("p", "p", DayNumber(0), listOf("known", "missing"))
+        assertFailsWith<IllegalArgumentException> {
+            ShareLink.encode(pattern, mapOf("known" to ShiftDefinition("known", "D", "Day")))
+        }
+    }
+
+    /**
+     * Two shifts can share a letter only if the sender typed the same letter
+     * twice, which the shift editor refuses. If it ever happened, the cycle
+     * must still decode to something coherent rather than to nonsense.
+     */
+    @Test
+    fun `collapses two ids that share a letter`() {
+        val pattern = Pattern("p", "p", DayNumber(0), listOf("a", "b"))
+        val definitions = mapOf(
+            "a" to ShiftDefinition("a", "D", "Day"),
+            "b" to ShiftDefinition("b", "D", "Days"),
+        )
+        val success = assertIs<ShareLinkResult.Success>(
+            ShareLink.decode(ShareLink.encode(pattern, definitions)),
+        )
+        assertEquals(listOf("D", "D"), success.codes)
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * A definition for every id the pattern uses, lettered with the id itself.
+     *
+     * Keeping letter and id equal lets the older tests go on asserting against
+     * `slots`, while the tests above cover the case that matters — the two
+     * being different.
+     */
+    private fun defsFor(pattern: Pattern): Map<String, ShiftDefinition> =
+        pattern.slots.filterNotNull().distinct().associateWith { id ->
+            ShiftDefinition(id = id, code = id, name = id)
+        }
 
     private fun fourOnFourOff() = Pattern(
         id = "p1",

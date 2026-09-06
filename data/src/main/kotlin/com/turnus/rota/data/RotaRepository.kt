@@ -458,6 +458,83 @@ class RotaRepository(
         if (clash != null) throw DuplicateShiftCodeException(code, clash.name)
     }
 
+    // ----------------------------------------------------------------- shared
+
+    /**
+     * Adopts a rota that arrived as a share code.
+     *
+     * A code carries shift *letters*, not ids, so the letters have to be
+     * matched against this phone's own shift types. Matching is by letter and
+     * case-insensitive, and the local shift wins: if the sender's N runs 19:00
+     * to 07:00 and the receiver's runs 18:00 to 06:00, the receiver keeps their
+     * own hours. They are the ones who have to turn up.
+     *
+     * A letter with no local match is created rather than refused. Someone
+     * whose workmate has an "R" they have never used should get their rota, not
+     * an error — with the new shift sitting in the shift editor waiting for its
+     * real times. Which letters were new is returned so the UI can say so.
+     *
+     * The active pattern's id is reused when there is one. Changed days,
+     * sickness and booked leave hang off that id: adopting a rota under a fresh
+     * id would leave every one of them attached to a pattern that is no longer
+     * active, and they would vanish from the calendar.
+     */
+    suspend fun importSharedPattern(
+        name: String,
+        anchor: DayNumber,
+        codes: List<String?>,
+    ): SharedPatternImport = db.withTransaction {
+        val existing = shiftTypes.getAll()
+        val idByCode = existing.associate { it.code.lowercase() to it.id }.toMutableMap()
+
+        val wanted = codes.filterNotNull().distinct()
+        val missing = wanted.filter { it.lowercase() !in idByCode }
+
+        val timestamp = now()
+        var order = (existing.maxOfOrNull { it.sortOrder } ?: -1) + 1
+        missing.forEach { code ->
+            val id = newId()
+            shiftTypes.insert(
+                ShiftTypeEntity(
+                    id = id,
+                    code = code,
+                    // The letter is all that travelled, so the letter is the
+                    // name until the user gives it a better one.
+                    name = code,
+                    color = NEW_SHIFT_COLORS[order % NEW_SHIFT_COLORS.size],
+                    // No times. Inventing hours for someone else's shift would
+                    // put wrong times in their reminders and their exported
+                    // calendar, which is worse than having none.
+                    startMinute = null,
+                    durationMinute = null,
+                    isWorking = true,
+                    sortOrder = order++,
+                    createdAt = timestamp,
+                    updatedAt = timestamp,
+                ),
+            )
+            idByCode[code.lowercase()] = id
+        }
+
+        val current = patterns.getActive()
+        val pattern = Pattern(
+            id = current?.id ?: newId(),
+            name = name.ifBlank { "My rota" },
+            anchor = anchor,
+            slots = codes.map { code -> code?.let { idByCode.getValue(it.lowercase()) } },
+        )
+        patterns.deactivateAll()
+        patterns.upsert(
+            pattern.toEntity(
+                isActive = true,
+                createdAt = current?.createdAt ?: timestamp,
+                updatedAt = timestamp,
+            ),
+        )
+
+        SharedPatternImport(pattern = pattern, createdShiftCodes = missing)
+    }
+
     // ----------------------------------------------------------------- backup
 
     /**
@@ -636,8 +713,35 @@ class RotaRepository(
         const val COLOR_NIGHT = 0xFF3D5A80.toInt()
         const val COLOR_EARLY = 0xFF2A9D8F.toInt()
         const val COLOR_LATE = 0xFF7B5EA7.toInt()
+
+        /**
+         * Colours for shifts created by an import.
+         *
+         * Distinct from the four seeded ones, so a shift that arrived from
+         * someone else's rota does not masquerade as a built-in, and cycled by
+         * sort order so two new shifts are never the same colour.
+         */
+        val NEW_SHIFT_COLORS = intArrayOf(
+            0xFFB5654A.toInt(),
+            0xFF4F7942.toInt(),
+            0xFF8C5C8E.toInt(),
+            0xFF3F7C88.toInt(),
+            0xFF6B7A87.toInt(),
+        )
     }
 }
+
+/**
+ * The outcome of adopting a shared rota.
+ *
+ * [createdShiftCodes] is empty in the common case — two people on the same site
+ * use the same letters — and worth telling the user about when it is not, since
+ * the new shifts have no times yet.
+ */
+data class SharedPatternImport(
+    val pattern: Pattern,
+    val createdShiftCodes: List<String>,
+)
 
 /**
  * A consistent snapshot of everything a reminder schedule depends on.
