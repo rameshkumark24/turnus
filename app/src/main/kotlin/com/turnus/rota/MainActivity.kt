@@ -213,6 +213,27 @@ private fun TurnusApp(
                     )
                 }
 
+                Destination.Pattern -> {
+                    // The same wizard that ran at first launch, re-entered.
+                    // Rebuilding a second, subtly different rota editor is how
+                    // the two drift apart until one of them has the anchor bug.
+                    val setupViewModel: SetupViewModel = viewModel(
+                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                    )
+                    // Idempotent: this runs again on every rotation and font
+                    // change, and priming twice would discard a built cycle.
+                    LaunchedEffect(Unit) { setupViewModel.editActive() }
+                    val leave = {
+                        setupViewModel.stopEditing()
+                        destination = Destination.Settings
+                    }
+                    SetupScreen(
+                        viewModel = setupViewModel,
+                        onComplete = leave,
+                        onExit = leave,
+                    )
+                }
+
                 Destination.Settings -> {
                     val settingsViewModel: SettingsViewModel = viewModel(
                         factory = remember(repository) { turnusViewModelFactory(repository) },
@@ -227,6 +248,7 @@ private fun TurnusApp(
                         // the app for it to take effect.
                         onRotaChanged = onRotaChanged,
                         onEditShifts = { destination = Destination.Shifts },
+                        onChangeRota = { destination = Destination.Pattern },
                     )
                 }
             }
@@ -235,7 +257,7 @@ private fun TurnusApp(
 }
 
 /** The calendar's sibling screens. Not a stack — each one returns to the month. */
-private enum class Destination { Month, Year, Settings, Shifts }
+private enum class Destination { Month, Year, Settings, Shifts, Pattern }
 
 /**
  * One factory for the three ViewModels the app has.

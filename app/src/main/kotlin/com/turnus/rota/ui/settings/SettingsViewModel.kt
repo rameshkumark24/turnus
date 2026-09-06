@@ -11,8 +11,13 @@ import com.turnus.rota.data.BackupSnapshot
 import com.turnus.rota.data.BackupSummary
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.ShiftStyle
+import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.engine.Pattern
 import com.turnus.rota.engine.ReminderSettings
+import com.turnus.rota.engine.ShareLinkResult
+import com.turnus.rota.engine.ShiftEngine
 import com.turnus.rota.share.RotaBackupFile
+import com.turnus.rota.share.RotaCode
 import com.turnus.rota.share.RotaExport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +34,16 @@ data class SettingsUiState(
     val settings: ReminderSettings = ReminderSettings(),
     val workingShifts: List<ShiftStyle> = emptyList(),
     val loading: Boolean = true,
+    val patternName: String = "",
+    val cycleLength: Int = 0,
+    /**
+     * What today resolves to right now.
+     *
+     * Shown beside the nudge buttons so moving the rota can be checked on the
+     * spot. "Move it a day and then go and look at the calendar" is a change
+     * nobody can verify, which is how a rota ends up two days out.
+     */
+    val todayLabel: String? = null,
 )
 
 /**
@@ -47,27 +62,83 @@ data class BackupUiState(
     val busy: Boolean = false,
     val pending: PendingRestore? = null,
     val canUndo: Boolean = false,
+    val pendingImport: PendingImport? = null,
+    /** True while the paste-a-code sheet is open. */
+    val entering: Boolean = false,
+    /**
+     * True while the rota an import replaced can still be put back.
+     *
+     * Shown as a button as well as offered in the snackbar. A snackbar lasts a
+     * few seconds; someone who tries a workmate's code, locks their phone and
+     * realises over tea that it was the wrong shift pattern deserves the way
+     * back to still be there.
+     */
+    val canUndoImport: Boolean = false,
 )
+
+/** What an Undo on a notice would put back. */
+enum class UndoKind { LastRestore, LastImport }
 
 /**
  * Something that went right.
  *
- * [undoable] rather than the screen matching on the wording: whether a message
- * carries an Undo is a property of what just happened, and deciding it by
- * comparing strings makes rephrasing a confirmation into a way to lose the
- * only route back.
+ * [undo] rather than the screen matching on the wording: whether a message
+ * carries an Undo, and what that Undo means, is a property of what just
+ * happened. Deciding it by comparing strings makes rephrasing a confirmation
+ * into a way to lose the only route back.
  */
-data class Notice(val text: String, val undoable: Boolean = false)
+data class Notice(val text: String, val undo: UndoKind? = null)
+
+/**
+ * A rota that arrived as a code, decoded and waiting to be accepted.
+ *
+ * [preview] is the next fortnight as the sender's cycle would fall here,
+ * resolved through the engine rather than recomputed — so what the user agrees
+ * to is what their calendar will show.
+ */
+data class PendingImport(
+    val name: String,
+    val cycleLength: Int,
+    val preview: List<String?>,
+    val newShiftCodes: List<String>,
+    internal val decoded: ShareLinkResult.Success,
+)
 
 class SettingsViewModel(
     private val repository: RotaRepository,
 ) : ViewModel() {
 
+    /**
+     * Read once, when the screen's ViewModel is created.
+     *
+     * Good enough here and nowhere near the engine: this only labels the nudge
+     * buttons. A settings screen left open across local midnight would show
+     * yesterday's shift until it is reopened, which is a wrong caption rather
+     * than a wrong rota.
+     */
+    private val today = DayNumber.today()
+
     val state: StateFlow<SettingsUiState> = combine(
         repository.observeReminderSettings(),
-        repository.observeShiftStyles().map { styles -> styles.values.filter(ShiftStyle::isWorking) },
-    ) { settings, shifts ->
-        SettingsUiState(settings = settings, workingShifts = shifts, loading = false)
+        repository.observeShiftStyles(),
+        repository.observeActivePattern(),
+        // A one-day window. Recomputed on every write, so the nudge buttons
+        // below show their own effect without the user leaving the screen.
+        repository.observeCalendar(today, today),
+    ) { settings, styles, pattern, days ->
+        val resolved = days.firstOrNull()
+        SettingsUiState(
+            settings = settings,
+            workingShifts = styles.values.filter(ShiftStyle::isWorking),
+            loading = false,
+            patternName = pattern?.name.orEmpty(),
+            cycleLength = pattern?.slots?.size ?: 0,
+            todayLabel = when {
+                pattern == null -> null
+                resolved?.shiftTypeId == null -> "Off"
+                else -> styles[resolved.shiftTypeId]?.name ?: "Off"
+            },
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -83,6 +154,16 @@ class SettingsViewModel(
 
     private val _backup = MutableStateFlow(BackupUiState())
     val backup: StateFlow<BackupUiState> = _backup.asStateFlow()
+
+    /**
+     * The rota an import replaced, kept only for as long as this screen lives.
+     *
+     * Deliberately not persisted, unlike the pre-restore file: an import can be
+     * reversed by pasting the old code again or by the rota editor, and a
+     * second on-disk snapshot with its own staleness rules would be more to go
+     * wrong than it is worth.
+     */
+    private var patternBeforeImport: Pattern? = null
 
     /**
      * Every change writes immediately and then reschedules.
@@ -133,6 +214,115 @@ class SettingsViewModel(
         val uri = RotaExport.writeIcs(context, repository)
         val name = repository.activePattern()?.name ?: "My rota"
         return RotaExport.shareIntent(uri, name)
+    }
+
+    // ------------------------------------------------------------------ share
+
+    /**
+     * Builds the message for the share sheet.
+     *
+     * Returns rather than launches, for the same reason [exportIcs] does: a
+     * ViewModel holding a Context outlives the screen it came from.
+     */
+    suspend fun shareIntent(): Intent = RotaCode.shareIntent(RotaCode.message(repository))
+
+    fun startEnteringCode() = _backup.update { it.copy(entering = true) }
+
+    fun cancelEnteringCode() = _backup.update { it.copy(entering = false) }
+
+    /**
+     * Decodes what was pasted and holds it for confirmation.
+     *
+     * Nothing is written yet. Accepting a code moves the whole calendar, so it
+     * gets the same treatment as a restore: show what it is, then ask.
+     */
+    fun readCode(pasted: String) {
+        busy {
+            when (val result = RotaCode.read(pasted)) {
+                is ShareLinkResult.Success -> {
+                    val known = repository.shiftStyles().map { it.code.lowercase() }.toSet()
+                    // The engine's own arithmetic, not a copy of it: the
+                    // preview has to agree with the calendar exactly, and
+                    // floorMod on a day delta is the one thing in this app most
+                    // likely to be got wrong twice.
+                    val preview = Pattern(
+                        id = "preview",
+                        name = result.name,
+                        anchor = result.anchor,
+                        slots = result.codes,
+                    ).let { pattern ->
+                        val today = DayNumber.today()
+                        (0 until PREVIEW_DAYS).map { ShiftEngine.scheduled(pattern, today + it.toLong()) }
+                    }
+                    _backup.update {
+                        it.copy(
+                            entering = false,
+                            pendingImport = PendingImport(
+                                name = result.name,
+                                cycleLength = result.codes.size,
+                                preview = preview,
+                                newShiftCodes = result.shiftCodes.filterNot { code ->
+                                    code.lowercase() in known
+                                },
+                                decoded = result,
+                            ),
+                        )
+                    }
+                }
+
+                ShareLinkResult.Malformed ->
+                    _error.value = "That is not a Turnus rota code"
+
+                is ShareLinkResult.UnsupportedVersion ->
+                    _error.value = "That code was made by a newer version of Turnus. Update the app first."
+            }
+        }
+    }
+
+    fun cancelImport() = _backup.update { it.copy(pendingImport = null) }
+
+    fun confirmImport(onRotaChanged: () -> Unit) {
+        val pending = _backup.value.pendingImport ?: return
+        busy {
+            // Kept so the notice can offer a way back. Adopting someone else's
+            // rota is a bigger change than it looks from the button, and the
+            // person who tapped it may only find out tomorrow morning.
+            patternBeforeImport = repository.activePattern()
+
+            val outcome = repository.importSharedPattern(
+                name = pending.decoded.name,
+                anchor = pending.decoded.anchor,
+                codes = pending.decoded.codes,
+            )
+            _backup.update { it.copy(pendingImport = null, canUndoImport = patternBeforeImport != null) }
+            _notice.value = Notice(
+                text = if (outcome.createdShiftCodes.isEmpty()) {
+                    "Rota updated"
+                } else {
+                    "Rota updated — added " + outcome.createdShiftCodes.joinToString()
+                },
+                undo = UndoKind.LastImport,
+            )
+            onRotaChanged()
+        }
+    }
+
+    // ------------------------------------------------------------------- rota
+
+    /**
+     * Moves the whole rota by a day.
+     *
+     * This is the fix for the commonest complaint a rota app gets — "it is out
+     * by a day" — and the reason no generated shift is ever stored. It is one
+     * field, applied instantly, reversible by pressing the other button, and it
+     * leaves every changed day and note exactly where the user put it.
+     */
+    fun nudge(days: Long, onRotaChanged: () -> Unit) {
+        busy {
+            repository.shiftActivePatternBy(days)
+            _notice.value = Notice(if (days < 0) "Moved back a day" else "Moved forward a day")
+            onRotaChanged()
+        }
     }
 
     // ----------------------------------------------------------------- backup
@@ -192,21 +382,46 @@ class SettingsViewModel(
             RotaBackupFile.keepUndoSnapshot(context, repository)
             repository.restore(pending.snapshot)
             _backup.update { it.copy(pending = null, canUndo = true) }
-            _notice.value = Notice("Rota restored", undoable = true)
+            _notice.value = Notice("Rota restored", undo = UndoKind.LastRestore)
             // Alarms were scheduled against the rota that just went away.
             onRotaChanged()
         }
     }
 
-    fun undoRestore(context: Context, onRotaChanged: () -> Unit) {
+    /**
+     * Puts back whatever the last change replaced.
+     *
+     * Two different reversals behind one word, because to the user they are the
+     * same thing: the last big change, undone.
+     */
+    fun undo(kind: UndoKind, context: Context, onRotaChanged: () -> Unit) {
         busy {
-            val previous = RotaBackupFile.undoSnapshot(context)
-            if (previous == null) {
-                _error.value = "There is nothing to undo"
-                return@busy
+            when (kind) {
+                UndoKind.LastRestore -> {
+                    val previous = RotaBackupFile.undoSnapshot(context)
+                    if (previous == null) {
+                        _error.value = "There is nothing to undo"
+                        return@busy
+                    }
+                    repository.restore(previous)
+                    _backup.update { it.copy(canUndo = false) }
+                }
+
+                UndoKind.LastImport -> {
+                    val previous = patternBeforeImport
+                    if (previous == null) {
+                        _error.value = "There is nothing to undo"
+                        return@busy
+                    }
+                    // The shifts an import created are left alone. Deleting them
+                    // would fail anyway once a day has been changed to one, and
+                    // an unused shift in the editor is a smaller problem than a
+                    // half-finished undo.
+                    repository.saveActivePattern(previous)
+                    patternBeforeImport = null
+                    _backup.update { it.copy(canUndoImport = false) }
+                }
             }
-            repository.restore(previous)
-            _backup.update { it.copy(canUndo = false) }
             _notice.value = Notice("Put back the way it was")
             onRotaChanged()
         }
@@ -243,5 +458,10 @@ class SettingsViewModel(
 
     fun clearNotice() {
         _notice.value = null
+    }
+
+    private companion object {
+        /** A fortnight: long enough to recognise a rota, short enough to read. */
+        const val PREVIEW_DAYS = 14
     }
 }

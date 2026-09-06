@@ -56,10 +56,23 @@ import java.time.format.DateTimeFormatter
  * shape.
  */
 @Composable
-fun SetupScreen(viewModel: SetupViewModel, onComplete: () -> Unit) {
+fun SetupScreen(
+    viewModel: SetupViewModel,
+    onComplete: () -> Unit,
+    /**
+     * Where back goes when the wizard has nowhere left to go. Null during first
+     * setup, where the first screen is the app's own front door and back should
+     * leave the app rather than reveal a calendar that does not exist yet.
+     */
+    onExit: (() -> Unit)? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    BackHandler(enabled = state.step != SetupStep.Welcome) { viewModel.back() }
+    BackHandler(enabled = state.step != SetupStep.Welcome || state.preparing) {
+        // back() reports whether it consumed the press. When it did not, this
+        // is the first step of an edit, and the way out is the screen behind.
+        if (!viewModel.back()) onExit?.invoke()
+    }
 
     Column(
         Modifier
@@ -69,13 +82,21 @@ fun SetupScreen(viewModel: SetupViewModel, onComplete: () -> Unit) {
             .padding(horizontal = 20.dp),
     ) {
         Box(Modifier.weight(1f)) {
-            when (state.step) {
-                SetupStep.Welcome -> WelcomeStep(onBegin = viewModel::begin)
-                SetupStep.ChoosePattern -> ChoosePatternStep(state, viewModel)
-                SetupStep.BuildCustom -> BuildCustomStep(state, viewModel)
-                SetupStep.ChooseShiftToday -> ChooseShiftTodayStep(state, viewModel)
-                SetupStep.ResolveAmbiguity -> ResolveAmbiguityStep(state, viewModel)
-                SetupStep.Confirm -> ConfirmStep(state, viewModel, onComplete)
+            when {
+                // Blank rather than a spinner, and for the same reason the app's
+                // own first frame is blank: the database answers in a frame or
+                // two, and a spinner that appears and vanishes reads worse than
+                // nothing. Without it, opening the editor flashes the welcome
+                // screen of an app the user set up months ago.
+                state.preparing -> Unit
+                else -> when (state.step) {
+                    SetupStep.Welcome -> WelcomeStep(onBegin = viewModel::begin)
+                    SetupStep.ChoosePattern -> ChoosePatternStep(state, viewModel, onExit)
+                    SetupStep.BuildCustom -> BuildCustomStep(state, viewModel)
+                    SetupStep.ChooseShiftToday -> ChooseShiftTodayStep(state, viewModel)
+                    SetupStep.ResolveAmbiguity -> ResolveAmbiguityStep(state, viewModel)
+                    SetupStep.Confirm -> ConfirmStep(state, viewModel, onComplete)
+                }
             }
         }
 
@@ -137,10 +158,19 @@ private fun WelcomeStep(onBegin: () -> Unit) {
 // ----------------------------------------------------------- choose pattern
 
 @Composable
-private fun ChoosePatternStep(state: SetupUiState, viewModel: SetupViewModel) {
+private fun ChoosePatternStep(
+    state: SetupUiState,
+    viewModel: SetupViewModel,
+    onExit: (() -> Unit)? = null,
+) {
     StepColumn(
-        title = "Which rota do you work?",
-        subtitle = "Pick the closest match. You can change any day afterwards.",
+        title = if (state.isEditing) "What do you work now?" else "Which rota do you work?",
+        subtitle = if (state.isEditing) {
+            "Your changed days and notes stay where they are. Nothing else is " +
+                "lost by picking a different rota."
+        } else {
+            "Pick the closest match. You can change any day afterwards."
+        },
     ) {
         state.presets.forEach { preset ->
             Card(
@@ -167,6 +197,16 @@ private fun ChoosePatternStep(state: SetupUiState, viewModel: SetupViewModel) {
         Spacer(Modifier.height(6.dp))
         OutlinedButton(onClick = viewModel::startCustom, modifier = Modifier.fillMaxWidth()) {
             Text("Mine is different — build it")
+        }
+        // Only when editing: during first setup there is nothing behind this
+        // screen, and an on-screen way out of a rota planner with no rota is a
+        // dead end. When changing an existing one, leaving is a normal thing to
+        // want and the gesture alone is not obvious enough to be the only route.
+        if (onExit != null) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
+                Text("Keep the rota I have")
+            }
         }
     }
 }
@@ -334,7 +374,13 @@ private fun ConfirmStep(state: SetupUiState, viewModel: SetupViewModel, onComple
             enabled = !state.saving && anchor != null,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (state.saving) "Saving..." else "That's my rota")
+            Text(
+                when {
+                    state.saving -> "Saving..."
+                    state.isEditing -> "Save my new rota"
+                    else -> "That's my rota"
+                },
+            )
         }
         Spacer(Modifier.height(6.dp))
         TextButton(onClick = { viewModel.back() }, modifier = Modifier.fillMaxWidth()) {

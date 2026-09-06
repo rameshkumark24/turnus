@@ -82,8 +82,21 @@ data class SetupUiState(
     val anchor: DayNumber? = null,
     val saving: Boolean = false,
     val cameFromBuilder: Boolean = false,
+    /**
+     * Set when an existing rota is being changed rather than a first one set up.
+     *
+     * The id is kept and reused on save, which is the whole reason this field
+     * holds an id rather than a boolean: the changed days the user has recorded
+     * — sickness, swaps, booked leave — hang off the pattern id. Saving under a
+     * fresh id would leave every one of them attached to a rota that is no
+     * longer active, and they would simply disappear from the calendar.
+     */
+    val editingPatternId: String? = null,
+    /** True for the frame or two between opening the editor and reading the rota. */
+    val preparing: Boolean = false,
     val error: String? = null,
 ) {
+    val isEditing: Boolean get() = editingPatternId != null
     val cycleLength: Int get() = slots.size
     val workingDays: Int get() = slots.count { it != null }
     // A val, not a computed get(): a fresh map on every read makes every
@@ -124,6 +137,57 @@ class SetupViewModel(
     fun begin() = _state.update { it.copy(step = SetupStep.ChoosePattern) }
 
     /**
+     * Re-enters the wizard to change a rota that already exists.
+     *
+     * People change teams, sites and employers, and a rota planner that can
+     * only be told once is one they uninstall when that happens.
+     *
+     * Starts at the pattern list rather than the welcome screen — they have met
+     * the app — and carries the current cycle in, so "build my own" opens on
+     * what they work now instead of a blank grid they have to retype from
+     * memory.
+     *
+     * Does nothing if an edit is already in progress. The screen calls this on
+     * entry, and entry happens again on every rotation and font-size change; a
+     * version that re-primed would throw away a half-built cycle each time.
+     */
+    fun editActive() {
+        if (_state.value.isEditing) return
+        _state.update { it.copy(preparing = true) }
+        viewModelScope.launch {
+            val pattern = repository.activePattern()
+            _state.update { current ->
+                if (pattern == null) {
+                    current.copy(preparing = false)
+                } else {
+                    current.copy(
+                        step = SetupStep.ChoosePattern,
+                        editingPatternId = pattern.id,
+                        patternName = pattern.name,
+                        slots = pattern.slots,
+                        anchor = null,
+                        candidates = emptyList(),
+                        cameFromBuilder = false,
+                        preparing = false,
+                        error = null,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Leaves edit mode, saved or abandoned.
+     *
+     * The wizard is one long-lived ViewModel, so without this an abandoned edit
+     * would still be sitting on the confirm step the next time the screen was
+     * opened — offering to save a rota the user had already walked away from.
+     */
+    fun stopEditing() = _state.update {
+        SetupUiState(styles = it.styles, presets = it.presets)
+    }
+
+    /**
      * Back within the wizard. Returns false when there is nowhere left to go,
      * so the caller can let the system handle it.
      */
@@ -131,7 +195,9 @@ class SetupViewModel(
         val current = _state.value
         val previous = when (current.step) {
             SetupStep.Welcome -> return false
-            SetupStep.ChoosePattern -> SetupStep.Welcome
+            // There is no welcome screen to go back to when the rota already
+            // exists; the caller closes the screen instead.
+            SetupStep.ChoosePattern -> if (current.isEditing) return false else SetupStep.Welcome
             SetupStep.BuildCustom -> SetupStep.ChoosePattern
             // Back into the builder when the cycle came from there. Routing to
             // the preset list instead stranded a hand-built cycle: the only way
@@ -272,7 +338,9 @@ class SetupViewModel(
             try {
                 repository.saveActivePattern(
                     Pattern(
-                        id = UUID.randomUUID().toString(),
+                        // Reused when editing. See SetupUiState.editingPatternId:
+                        // a new id would orphan every changed day.
+                        id = current.editingPatternId ?: UUID.randomUUID().toString(),
                         name = current.patternName.ifBlank { "My rota" },
                         anchor = anchor,
                         slots = current.slots,

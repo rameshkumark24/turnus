@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -83,6 +84,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onRotaChanged: () -> Unit,
     onEditShifts: () -> Unit,
+    onChangeRota: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -149,15 +151,17 @@ fun SettingsScreen(
 
     LaunchedEffect(notice) {
         val current = notice ?: return@LaunchedEffect
+        val undo = current.undo
         val result = snackbarHostState.showSnackbar(
             message = current.text,
-            // The one place an Undo is genuinely needed, so it is offered where
-            // the user is already looking rather than filed under a menu.
-            actionLabel = if (current.undoable) "Undo" else null,
-            duration = if (current.undoable) SnackbarDuration.Long else SnackbarDuration.Short,
+            // Offered where the user is already looking rather than filed under
+            // a menu: these are the two changes in the app that replace a rota
+            // wholesale, and both can be the wrong one.
+            actionLabel = if (undo != null) "Undo" else null,
+            duration = if (undo != null) SnackbarDuration.Long else SnackbarDuration.Short,
         )
-        if (result == SnackbarResult.ActionPerformed) {
-            viewModel.undoRestore(context, onRotaChanged)
+        if (result == SnackbarResult.ActionPerformed && undo != null) {
+            viewModel.undo(undo, context, onRotaChanged)
         }
         viewModel.clearNotice()
     }
@@ -168,6 +172,23 @@ fun SettingsScreen(
             busy = backup.busy,
             onConfirm = { viewModel.confirmRestore(context, onRotaChanged) },
             onDismiss = viewModel::cancelRestore,
+        )
+    }
+
+    if (backup.entering) {
+        CodeEntry(
+            busy = backup.busy,
+            onSubmit = viewModel::readCode,
+            onDismiss = viewModel::cancelEnteringCode,
+        )
+    }
+
+    backup.pendingImport?.let { pending ->
+        ImportConfirmation(
+            pending = pending,
+            busy = backup.busy,
+            onConfirm = { viewModel.confirmImport(onRotaChanged) },
+            onDismiss = viewModel::cancelImport,
         )
     }
 
@@ -313,6 +334,71 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(18.dp))
+            Text("Your rota", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text(
+                    state.patternName.ifBlank { "Your rota" },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    buildString {
+                        if (state.cycleLength > 0) append(state.cycleLength).append("-day cycle")
+                        state.todayLabel?.let {
+                            if (isNotEmpty()) append(" · ")
+                            append("today is ").append(it)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(12.dp))
+                Text("Out by a day?", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Move the whole rota without touching anything you have " +
+                        "already changed. Watch the line above as you tap.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !backup.busy && state.cycleLength > 0,
+                        onClick = { viewModel.nudge(-1, onRotaChanged) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { contentDescription = "Move my rota back one day" },
+                    ) {
+                        Text("‹  A day back")
+                    }
+                    OutlinedButton(
+                        enabled = !backup.busy && state.cycleLength > 0,
+                        onClick = { viewModel.nudge(1, onRotaChanged) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { contentDescription = "Move my rota forward one day" },
+                    ) {
+                        Text("A day on  ›")
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text("Changed jobs or teams?", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Pick a different rota or build a new one. Your shifts, your " +
+                        "changed days and your notes all stay.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = onChangeRota) { Text("Change my rota") }
+            }
+
+            Spacer(Modifier.height(18.dp))
             Text("Share and export", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(10.dp))
             Card {
@@ -344,6 +430,53 @@ fun SettingsScreen(
                     },
                 ) {
                     Text(if (exporting) "Preparing…" else "Export to calendar")
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Send your rota to a workmate", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Everyone on your shift works the same rotation. Send them a " +
+                        "code and they can have it in seconds instead of typing " +
+                        "it in themselves.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !backup.busy,
+                        onClick = {
+                            scope.launch {
+                                runCatching { viewModel.shareIntent() }
+                                    .onSuccess { context.startActivity(it) }
+                                    .onFailure {
+                                        snackbarHostState.showSnackbar(
+                                            it.message ?: "Could not share your rota",
+                                        )
+                                    }
+                            }
+                        },
+                    ) {
+                        Text("Send my rota")
+                    }
+                    OutlinedButton(
+                        enabled = !backup.busy,
+                        onClick = viewModel::startEnteringCode,
+                    ) {
+                        Text("I have a code")
+                    }
+                }
+                if (backup.canUndoImport) {
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        enabled = !backup.busy,
+                        onClick = { viewModel.undo(UndoKind.LastImport, context, onRotaChanged) },
+                    ) {
+                        Text("Go back to my old rota")
+                    }
                 }
             }
 
@@ -390,7 +523,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(6.dp))
                     TextButton(
                         enabled = !backup.busy,
-                        onClick = { viewModel.undoRestore(context, onRotaChanged) },
+                        onClick = { viewModel.undo(UndoKind.LastRestore, context, onRotaChanged) },
                     ) {
                         Text("Undo the last restore")
                     }
@@ -484,6 +617,121 @@ private fun RestoreConfirmation(
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
         },
+    )
+}
+
+/**
+ * Paste what a workmate sent.
+ *
+ * A text field rather than a clipboard read: reading the clipboard without
+ * being asked shows a system warning on Android 12 and above, and an app that
+ * looks through your clipboard is exactly what a rota planner should not be.
+ * The field accepts the whole message, not just the code — nobody selects
+ * precisely 60 characters out of a chat on a phone.
+ */
+@Composable
+private fun CodeEntry(
+    busy: Boolean,
+    onSubmit: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var pasted by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Paste the code") },
+        text = {
+            Column {
+                Text(
+                    "Paste the whole message they sent — Turnus will find the code in it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = pasted,
+                    onValueChange = { pasted = it },
+                    label = { Text("Rota code") },
+                    singleLine = false,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSubmit(pasted) },
+                enabled = !busy && pasted.isNotBlank(),
+            ) {
+                Text("Look at it")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
+    )
+}
+
+/**
+ * What a shared rota would do to this phone's calendar, before it does it.
+ *
+ * The fortnight strip is the whole point. A cycle name and a length mean
+ * nothing to someone checking whether their mate sent the right rota; the days
+ * they are about to be given, starting today, mean everything.
+ */
+@Composable
+private fun ImportConfirmation(
+    pending: PendingImport,
+    busy: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Use this rota?") },
+        text = {
+            Column {
+                Text(
+                    buildString {
+                        append(pending.name.ifBlank { "A rota" })
+                        if (pending.cycleLength > 0) {
+                            append(" — ").append(pending.cycleLength).append("-day cycle")
+                        }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("The next two weeks", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    pending.preview.joinToString(" ") { it ?: "·" },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                if (pending.newShiftCodes.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        buildString {
+                            append("This adds ")
+                            append(pending.newShiftCodes.joinToString())
+                            append(" to your shifts. They have no times yet — set them ")
+                            append("in Your shifts, or reminders will not know when to fire.")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Your own shift times, your changed days and your notes all stay " +
+                        "as they are.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !busy) {
+                Text(if (busy) "Setting up…" else "Use this rota")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
     )
 }
 
