@@ -30,6 +30,19 @@ class ShiftTypeInUseException internal constructor(
     },
 )
 
+/**
+ * Two shifts cannot share a letter.
+ *
+ * The database enforces this with a unique index, but a raw constraint
+ * violation surfaces as "UNIQUE constraint failed: shift_type.code (code 2067)",
+ * which is not something to show a shift worker who typed N twice. Caught and
+ * named here so the UI can say which shift already has it.
+ */
+class DuplicateShiftCodeException internal constructor(
+    val code: String,
+    val usedBy: String,
+) : IllegalArgumentException("'$code' is already used by $usedBy")
+
 /** A pattern referenced shift ids that do not exist. */
 class UnknownShiftTypeException internal constructor(
     val ids: List<String>,
@@ -332,6 +345,7 @@ class RotaRepository(
         ShiftDefinition(id, code, name, startMinute, durationMinute)
         val timestamp = now()
         db.withTransaction {
+            requireCodeIsFree(code, exceptId = null)
             shiftTypes.insert(
                 ShiftTypeEntity(
                     id = id,
@@ -351,6 +365,48 @@ class RotaRepository(
             )
         }
         return id
+    }
+
+    /**
+     * Edits an existing shift type in place.
+     *
+     * The id is deliberately preserved. Patterns and overrides reference shifts
+     * by id, so replacing the row would orphan every day already assigned to
+     * it — someone correcting their start time from 07:00 to 06:00 would find
+     * their whole calendar had gone blank.
+     *
+     * `created_at` is preserved for the same class of reason: it is an audit
+     * field, and an edit is not a creation.
+     *
+     * @throws UnknownShiftTypeException if the shift no longer exists.
+     * @throws IllegalArgumentException via [ShiftDefinition] for times outside a
+     *   day, or a start without a duration.
+     */
+    suspend fun updateShiftType(
+        id: String,
+        code: String,
+        name: String,
+        color: Int,
+        startMinute: Int?,
+        durationMinute: Int?,
+    ) {
+        // Borrows the domain type's validation before touching the database.
+        ShiftDefinition(id, code, name, startMinute, durationMinute)
+        val timestamp = now()
+        db.withTransaction {
+            val existing = shiftTypes.getById(id) ?: throw UnknownShiftTypeException(listOf(id))
+            requireCodeIsFree(code, exceptId = id)
+            shiftTypes.upsert(
+                existing.copy(
+                    code = code,
+                    name = name,
+                    color = color,
+                    startMinute = startMinute,
+                    durationMinute = durationMinute,
+                    updatedAt = timestamp,
+                ),
+            )
+        }
     }
 
     /**
@@ -378,6 +434,17 @@ class RotaRepository(
             }
             shiftTypes.delete(row)
         }
+    }
+
+    /**
+     * Checked in Kotlin as well as by the unique index, so the failure arrives
+     * as something the UI can put in front of a person. Inside the caller.s
+     * transaction, so nothing can claim the code between the check and the write.
+     */
+    private suspend fun requireCodeIsFree(code: String, exceptId: String?) {
+        val clash = shiftTypes.getAll()
+            .firstOrNull { it.code.equals(code, ignoreCase = true) && it.id != exceptId }
+        if (clash != null) throw DuplicateShiftCodeException(code, clash.name)
     }
 
     // ------------------------------------------------------------------ setup

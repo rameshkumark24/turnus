@@ -31,6 +31,9 @@ interface ShiftTypeDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(shiftType: ShiftTypeEntity)
 
+    @Upsert
+    suspend fun upsert(shiftType: ShiftTypeEntity)
+
     /**
      * IGNORE, not ABORT: seeding can be attempted from more than one place at
      * startup, and losing that race must be a no-op rather than a crash.

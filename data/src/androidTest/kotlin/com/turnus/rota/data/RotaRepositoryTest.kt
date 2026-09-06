@@ -292,6 +292,122 @@ class RotaRepositoryTest {
         )
     }
 
+    // ------------------------------------------------------------ editing
+
+    /**
+     * The reason updateShiftType edits in place rather than replacing the row:
+     * patterns and overrides reference shifts by id, so a new id would orphan
+     * every day already assigned to it. Someone correcting a start time would
+     * find their calendar had gone blank.
+     */
+    @Test
+    fun editingAShiftKeepsEveryDayThatUsesIt() = runBlocking {
+        repository.saveActivePattern(pattern(slots = listOf(ShiftCode.DAY, null)))
+        val day = DayNumber.of(2026, 9, 5)
+        repository.setOverride(day, ShiftCode.NIGHT)
+
+        repository.updateShiftType(
+            id = ShiftCode.DAY,
+            code = "X",
+            name = "Earlies",
+            color = 0xFF00FF00.toInt(),
+            startMinute = 6 * 60,
+            durationMinute = 8 * 60,
+        )
+
+        val row = db.shiftTypeDao().getById(ShiftCode.DAY)!!
+        assertEquals("Earlies", row.name)
+        assertEquals(6 * 60, row.startMinute)
+        assertEquals(
+            "the pattern must still resolve to the edited shift",
+            ShiftCode.DAY,
+            resolved(DayNumber.of(2026, 9, 1)),
+        )
+        assertEquals("an override must survive an edit", ShiftCode.NIGHT, resolved(day))
+    }
+
+    /** An edit is not a creation, so the audit field must not move. */
+    @Test
+    fun editingPreservesCreatedAt() = runBlocking {
+        val before = db.shiftTypeDao().getById(ShiftCode.DAY)!!
+
+        repository.updateShiftType(
+            id = ShiftCode.DAY,
+            code = before.code,
+            name = "Renamed",
+            color = before.color,
+            startMinute = before.startMinute,
+            durationMinute = before.durationMinute,
+        )
+
+        val after = db.shiftTypeDao().getById(ShiftCode.DAY)!!
+        assertEquals(before.createdAt, after.createdAt)
+        assertEquals(before.sortOrder, after.sortOrder)
+    }
+
+    @Test
+    fun editingRejectsImpossibleTimes(): Unit = runBlocking {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                repository.updateShiftType(
+                    ShiftCode.DAY, "D", "Day", 0, startMinute = 1500, durationMinute = 60,
+                )
+            }
+        }
+        // A start without a length is the pairing ShiftDefinition enforces.
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                repository.updateShiftType(
+                    ShiftCode.DAY, "D", "Day", 0, startMinute = 600, durationMinute = null,
+                )
+            }
+        }
+    }
+
+    /** Two shifts sharing a letter is a persons mistake, not a crash. */
+    @Test
+    fun aLetterAlreadyTakenIsRefusedByName() = runBlocking {
+        val failure = assertThrows(DuplicateShiftCodeException::class.java) {
+            runBlocking {
+                repository.updateShiftType(
+                    id = ShiftCode.DAY,
+                    code = "E",
+                    name = "Day",
+                    color = 0,
+                    startMinute = 7 * 60,
+                    durationMinute = 8 * 60,
+                )
+            }
+        }
+
+        assertEquals("Early", failure.usedBy)
+        assertEquals("D", db.shiftTypeDao().getById(ShiftCode.DAY)!!.code)
+    }
+
+    /** Keeping your own letter while editing something else must still work. */
+    @Test
+    fun aShiftCanKeepItsOwnLetter() = runBlocking {
+        repository.updateShiftType(
+            id = ShiftCode.DAY,
+            code = "D",
+            name = "Days",
+            color = 0,
+            startMinute = 6 * 60,
+            durationMinute = 12 * 60,
+        )
+
+        assertEquals("Days", db.shiftTypeDao().getById(ShiftCode.DAY)!!.name)
+    }
+
+    @Test
+    fun editingAShiftThatDoesNotExistFails(): Unit = runBlocking {
+        assertThrows(UnknownShiftTypeException::class.java) {
+            runBlocking {
+                repository.updateShiftType("ghost", "G", "Ghost", 0, null, null)
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private fun pattern(

@@ -35,6 +35,8 @@ import com.turnus.rota.notify.ReminderScheduler
 import com.turnus.rota.ui.settings.SettingsScreen
 import com.turnus.rota.ui.settings.SettingsViewModel
 import com.turnus.rota.ui.setup.SetupViewModel
+import com.turnus.rota.ui.shifts.ShiftEditorScreen
+import com.turnus.rota.ui.shifts.ShiftEditorViewModel
 import com.turnus.rota.ui.year.YearScreen
 import com.turnus.rota.ui.year.YearViewModel
 import com.turnus.rota.ui.theme.TurnusTheme
@@ -198,6 +200,19 @@ private fun TurnusApp(
                     )
                 }
 
+                Destination.Shifts -> {
+                    val shiftViewModel: ShiftEditorViewModel = viewModel(
+                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                    )
+                    BackHandler { destination = Destination.Settings }
+                    ShiftEditorScreen(
+                        viewModel = shiftViewModel,
+                        // Back to settings, not the calendar: this screen is
+                        // reached from there and nowhere else.
+                        onBack = { destination = Destination.Settings },
+                    )
+                }
+
                 Destination.Settings -> {
                     val settingsViewModel: SettingsViewModel = viewModel(
                         factory = remember(repository) { turnusViewModelFactory(repository) },
@@ -211,6 +226,7 @@ private fun TurnusApp(
                         // on and is watching the screen should not have to leave
                         // the app for it to take effect.
                         onRemindersChanged = onRotaChanged,
+                        onEditShifts = { destination = Destination.Shifts },
                     )
                 }
             }
@@ -219,7 +235,7 @@ private fun TurnusApp(
 }
 
 /** The calendar's sibling screens. Not a stack — each one returns to the month. */
-private enum class Destination { Month, Year, Settings }
+private enum class Destination { Month, Year, Settings, Shifts }
 
 /**
  * One factory for the three ViewModels the app has.
@@ -234,4 +250,5 @@ private fun turnusViewModelFactory(repository: RotaRepository): ViewModelProvide
         initializer { MonthViewModel(repository) }
         initializer { SettingsViewModel(repository) }
         initializer { YearViewModel(repository) }
+        initializer { ShiftEditorViewModel(repository) }
     }

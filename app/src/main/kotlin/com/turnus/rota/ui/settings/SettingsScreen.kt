@@ -74,6 +74,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onRemindersChanged: () -> Unit,
+    onEditShifts: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -245,6 +246,22 @@ fun SettingsScreen(
                     action = "Open app settings",
                     onAction = { context.openAppSettings() },
                 )
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text("Your shifts", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Names, colours and hours", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Reminders and the exported calendar use these times. If your " +
+                        "shift starts at a different hour, change it here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = onEditShifts) { Text("Edit shifts") }
             }
 
             Spacer(Modifier.height(18.dp))
