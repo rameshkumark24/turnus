@@ -55,12 +55,21 @@ android {
             // live ads while developing is how an AdMob account gets suspended.
             manifestPlaceholders["admobAppId"] = testAppId
             buildConfigField("String", "AD_BANNER_UNIT_ID", "\"$testBannerId\"")
+            // The hashed id UMP logs on first run. Without it, setDebugGeography
+            // is ignored on a real device and the EEA consent form — the one
+            // that most needs testing — can never be seen from outside the EEA.
+            buildConfigField(
+                "String",
+                "AD_TEST_DEVICE_ID",
+                "\"${localProperties.getProperty("admob.testDeviceId").orEmpty()}\"",
+            )
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             manifestPlaceholders["admobAppId"] = adId("admob.appId", testAppId)
+            buildConfigField("String", "AD_TEST_DEVICE_ID", "\"\"")
             buildConfigField(
                 "String",
                 "AD_BANNER_UNIT_ID",

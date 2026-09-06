@@ -74,6 +74,17 @@ object AdGate {
                     setConsentDebugSettings(
                         ConsentDebugSettings.Builder(activity)
                             .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
+                            .apply {
+                                // Debug geography is ignored unless the device is
+                                // registered as a test device. Without this the
+                                // EEA form silently never appears on real
+                                // hardware outside the EEA, and the path most
+                                // worth testing is the one that cannot be.
+                                // UMP logs the id to use on first run.
+                                BuildConfig.AD_TEST_DEVICE_ID
+                                    .takeIf { it.isNotBlank() }
+                                    ?.let { addTestDeviceHashedId(it) }
+                            }
                             .build(),
                     )
                 }
