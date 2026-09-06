@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.turnus.rota.TurnusApplication
+import com.turnus.rota.widget.RotaWidgetReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ class BootReceiver : BroadcastReceiver() {
                 NotificationChannels.ensure(context)
                 ReminderScheduler.reschedule(context, application.repository)
                 ReminderTopUpWorker.enqueue(context)
+                RotaWidgetReceiver.refresh(context)
             } catch (failure: Exception) {
                 Log.e(TAG, "could not restore reminders after ${intent.action}", failure)
             } finally {

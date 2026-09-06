@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  updatePeriodMillis is deliberately 0. The system caps it at half an hour and
+  wakes the device to honour it, which for a calendar that changes at midnight
+  is a lot of battery for nothing. The app, the daily worker and the boot
+  receiver push updates instead, at the moments the content actually changes.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="70dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="70dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout" />

@@ -81,6 +81,7 @@ kotlin {
 
 dependencies {
     implementation(project(":data"))
+    implementation(project(":widget"))
 
     implementation(libs.core.ktx)
     implementation(libs.work.runtime.ktx)

@@ -37,6 +37,7 @@ import com.turnus.rota.ui.setup.SetupViewModel
 import com.turnus.rota.ui.year.YearScreen
 import com.turnus.rota.ui.year.YearViewModel
 import com.turnus.rota.ui.theme.TurnusTheme
+import com.turnus.rota.widget.RotaWidgetReceiver
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -94,6 +95,10 @@ class MainActivity : ComponentActivity() {
         application.applicationScope.launch {
             runCatching { ReminderScheduler.reschedule(applicationContext, application.repository) }
                 .onFailure { Log.e("MainActivity", "could not reschedule reminders", it) }
+            // The home screen must not keep showing a shift the user has just
+            // changed. Same moment as the alarms: once the edits are done.
+            runCatching { RotaWidgetReceiver.refresh(applicationContext) }
+                .onFailure { Log.e("MainActivity", "could not refresh widget", it) }
         }
     }
 }

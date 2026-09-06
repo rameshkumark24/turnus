@@ -8,6 +8,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.turnus.rota.TurnusApplication
+import com.turnus.rota.widget.RotaWidgetReceiver
 import java.util.concurrent.TimeUnit
 
 /**
@@ -34,6 +35,9 @@ class ReminderTopUpWorker(
         return try {
             NotificationChannels.ensure(applicationContext)
             ReminderScheduler.reschedule(applicationContext, application.repository)
+            // Rolls the widget over the date boundary for someone who has not
+            // opened the app: without this it would sit on a stale "today".
+            RotaWidgetReceiver.refresh(applicationContext)
             Result.success()
         } catch (failure: Exception) {
             // Retry rather than failure: the usual cause is transient, and a

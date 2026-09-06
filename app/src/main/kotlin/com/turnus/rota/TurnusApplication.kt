@@ -1,6 +1,7 @@
 package com.turnus.rota
 
 import android.app.Application
+import com.turnus.rota.data.RotaData
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.data.TurnusDatabase
 import com.turnus.rota.notify.NotificationChannels
@@ -43,6 +44,9 @@ class TurnusApplication : Application() {
         //
         // No starter pattern: the app must never decide a user's rota for them.
         // With no pattern saved, the root routes to setup instead.
+        // Installed before anything else can ask for it: the widget lives in
+        // another module but the same process, and both must use one instance.
+        RotaData.install(repository)
         applicationScope.launch { repository.seedDefaultsIfEmpty() }
 
         // The channel must exist before the user goes looking for it in system
