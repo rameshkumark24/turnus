@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the picker shows before the widget is placed.
+
+  Static by necessity: the picker renders this without running the app, so it
+  cannot read anyone's rota. It is a plausible week rather than real data —
+  the alternative is the launcher showing a bare app icon, which reads as an
+  unfinished widget and is a reason not to add it.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/preview_bg"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Night"
+        android:textColor="#E5ECF0"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Off from tomorrow"
+        android:textColor="#A1B0BA"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_on" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_off" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_off" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_off" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_off" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="3dp"
+            android:background="@drawable/preview_block_on" />
+        <View android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/preview_block_on" />
+    </LinearLayout>
+</LinearLayout>

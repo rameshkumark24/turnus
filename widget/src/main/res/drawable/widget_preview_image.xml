@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A drawable, not only a previewLayout.
+
+  previewLayout is API 31+ and launchers are free to ignore it — Funtouch does,
+  and falls back to the initialLayout, which for Glance is a blank loading
+  spinner. A widget previewed as an empty white box is a widget nobody adds.
+  A drawable is understood by every launcher on every version.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="80dp"
+    android:viewportWidth="180"
+    android:viewportHeight="80">
+
+    <path
+        android:fillColor="#151E24"
+        android:pathData="M8,0h164a8,8 0 0 1 8,8v64a8,8 0 0 1 -8,8H8a8,8 0 0 1 -8,-8V8a8,8 0 0 1 8,-8z" />
+
+    <!-- "Night", as a solid bar: real text in a preview would need translating. -->
+    <path android:fillColor="#E5ECF0" android:pathData="M12,14h34v7h-34z" />
+    <path android:fillColor="#A1B0BA" android:pathData="M12,27h56v5h-56z" />
+
+    <!-- The week strip: two on, four off, two on. -->
+    <path android:fillColor="#4C6E9C" android:pathData="M12,44h20v22h-20z" />
+    <path android:fillColor="#1B262D" android:pathData="M35,44h20v22h-20z" />
+    <path android:fillColor="#1B262D" android:pathData="M58,44h20v22h-20z" />
+    <path android:fillColor="#1B262D" android:pathData="M81,44h20v22h-20z" />
+    <path android:fillColor="#1B262D" android:pathData="M104,44h20v22h-20z" />
+    <path android:fillColor="#E0A32E" android:pathData="M127,44h20v22h-20z" />
+    <path android:fillColor="#4C6E9C" android:pathData="M150,44h18v22h-18z" />
+</vector>
