@@ -542,8 +542,8 @@ fun SettingsScreen(
                     Text("Ad privacy choices", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "Turnus is free because of the banner at the bottom of the " +
-                            "calendar. You can change what you agreed to at any time.",
+                        "Turnus is free because of the adverts on the calendar and " +
+                            "the year view. You can change what you agreed to at any time.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

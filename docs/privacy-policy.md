@@ -19,7 +19,8 @@ change, the notes you write and your reminder settings are stored only in the
 app's own private storage on your device. Turnus has no accounts, no sign-up,
 no servers, and no way for us to see your data.
 
-The app is free and paid for by a single advert at the bottom of the calendar.
+The app is free and paid for by two adverts: a banner at the bottom of the
+calendar, and one in the year view.
 That advert is served by Google AdMob, and **AdMob collects data about your
 device**. That is the only data collection in the app, and the rest of this
 policy is mostly about it.
@@ -81,12 +82,23 @@ notifications and schedules alarms on your device. Those alarms are set and read
 entirely on the phone; nothing about your shifts is sent anywhere in order to
 remind you.
 
-## Sharing your rota
+## Sharing, exporting and backing up your rota
 
-Exporting your rota produces a calendar file on your device and hands it to
-whichever app you choose from the Android share sheet. Turnus does not upload
-it. Once you send that file to another app or person, what happens to it is
-governed by their handling of it, not ours.
+Three features hand your rota to something outside the app, and all three
+happen only when you ask for them:
+
+- **Export to calendar** writes a calendar file and passes it to whichever app
+  you pick from the Android share sheet.
+- **Send my rota** produces a short code describing your shift pattern, its
+  start date and its name, and passes it to the app you pick. The code contains
+  no identifier and nothing about you.
+- **Save a backup** writes a file to the location you choose in your device's
+  file picker. Turnus can only write to the single file you select; it has no
+  storage permission and cannot see anything else.
+
+Turnus uploads none of these. Once a file or code has been sent to another app
+or person — including a backup saved into a folder that syncs to a cloud
+account — what happens to it is governed by their handling of it, not ours.
 
 ## Children
 

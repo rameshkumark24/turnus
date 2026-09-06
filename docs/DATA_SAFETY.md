@@ -49,6 +49,12 @@ Yes.
 > The user's rota is calendar-shaped but never leaves the device, so it is not
 > "collected" under Play's definition, which covers transmission off-device.
 
+> Backup, calendar export and share codes do not change this answer. Each is
+> the user handing their own data to an app they chose, through the system
+> share sheet or file picker — Turnus transmits nothing itself. "Files and
+> docs" stays **No** for the same reason, and because the app holds no storage
+> permission: the file picker grants it exactly one file, the one selected.
+
 ## Other declarations
 
 - **Data is encrypted in transit:** Yes (the ads SDK and the config fetch use HTTPS)
