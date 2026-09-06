@@ -225,7 +225,7 @@ private fun TurnusApp(
                         // waiting for onStop: someone who just turned reminders
                         // on and is watching the screen should not have to leave
                         // the app for it to take effect.
-                        onRemindersChanged = onRotaChanged,
+                        onRotaChanged = onRotaChanged,
                         onEditShifts = { destination = Destination.Shifts },
                     )
                 }

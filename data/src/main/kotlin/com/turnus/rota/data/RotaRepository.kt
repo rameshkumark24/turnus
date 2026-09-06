@@ -49,6 +49,17 @@ class UnknownShiftTypeException internal constructor(
 ) : IllegalArgumentException("No shift type for id(s): ${ids.joinToString()}")
 
 /**
+ * A backup was not internally consistent, so nothing was written.
+ *
+ * Carries the reason in words a user can read: restore is the one operation
+ * that destroys what they already have, so "could not restore" on its own is
+ * not an acceptable thing to tell them.
+ */
+class BackupRejectedException internal constructor(
+    val reason: String,
+) : IllegalArgumentException(reason)
+
+/**
  * A shift type as the UI needs it: the engine's [ShiftDefinition] plus the
  * presentation fields.
  *
@@ -445,6 +456,138 @@ class RotaRepository(
         val clash = shiftTypes.getAll()
             .firstOrNull { it.code.equals(code, ignoreCase = true) && it.id != exceptId }
         if (clash != null) throw DuplicateShiftCodeException(code, clash.name)
+    }
+
+    // ----------------------------------------------------------------- backup
+
+    /**
+     * Everything the user owns, read in one transaction.
+     *
+     * One transaction because a backup assembled from four separate reads
+     * could contain a pattern referring to a shift type deleted between the
+     * second read and the third — a file that looks fine and cannot be
+     * restored, discovered by the user at the worst possible moment.
+     */
+    suspend fun snapshot(appVersion: String): BackupSnapshot = db.withTransaction {
+        BackupSnapshot(
+            createdAtMillis = now(),
+            appVersion = appVersion,
+            shiftTypes = shiftTypes.getAll().map {
+                BackupShiftType(
+                    id = it.id,
+                    code = it.code,
+                    name = it.name,
+                    color = it.color,
+                    startMinute = it.startMinute,
+                    durationMinute = it.durationMinute,
+                    isWorking = it.isWorking,
+                    sortOrder = it.sortOrder,
+                    createdAtMillis = it.createdAt,
+                    updatedAtMillis = it.updatedAt,
+                )
+            },
+            patterns = patterns.getAll().map {
+                BackupPattern(
+                    id = it.id,
+                    name = it.name,
+                    anchorDay = it.anchorDay,
+                    slots = SlotCodec.decode(it.slots),
+                    isActive = it.isActive,
+                    createdAtMillis = it.createdAt,
+                    updatedAtMillis = it.updatedAt,
+                )
+            },
+            changedDays = overrides.getAll().map {
+                BackupChangedDay(
+                    patternId = it.patternId,
+                    day = it.day,
+                    shiftTypeId = it.shiftTypeId,
+                    overridesShift = it.overridesShift,
+                    note = it.note,
+                    createdAtMillis = it.createdAt,
+                    updatedAtMillis = it.updatedAt,
+                )
+            },
+            settings = appMeta.getAll().associate { it.key to it.value },
+        )
+    }
+
+    /**
+     * Replaces the entire rota with the contents of a backup.
+     *
+     * Replace, not merge. Merging two rotas has no correct answer — whose
+     * anchor wins, what happens to a day changed in both — and a user restoring
+     * a backup is asking to go back to a known state, not to negotiate with
+     * the one they have.
+     *
+     * Validated before the first delete and executed in a single transaction,
+     * so the failure mode is "nothing happened", never "half your rota".
+     *
+     * @throws BackupRejectedException if the snapshot is not internally
+     *   consistent. Nothing is written in that case.
+     */
+    suspend fun restore(snapshot: BackupSnapshot) {
+        RotaBackup.validate(snapshot)?.let { throw BackupRejectedException(it) }
+
+        val timestamp = now()
+        // A row from a backup keeps its original audit timestamps where it has
+        // them: they say when the user made the change, and a restore is not a
+        // change to their rota. Zero means a file that predates the field.
+        fun stamp(value: Long): Long = if (value > 0L) value else timestamp
+
+        db.withTransaction {
+            // Overrides first: they hold a RESTRICT foreign key to shift_type,
+            // so clearing the shifts before the days that reference them fails.
+            overrides.deleteAll()
+            patterns.deleteAll()
+            shiftTypes.deleteAll()
+            appMeta.deleteAll()
+
+            shiftTypes.insertAll(
+                snapshot.shiftTypes.map {
+                    ShiftTypeEntity(
+                        id = it.id,
+                        code = it.code,
+                        name = it.name,
+                        color = it.color,
+                        startMinute = it.startMinute,
+                        durationMinute = it.durationMinute,
+                        isWorking = it.isWorking,
+                        sortOrder = it.sortOrder,
+                        createdAt = stamp(it.createdAtMillis),
+                        updatedAt = stamp(it.updatedAtMillis),
+                    )
+                },
+            )
+            patterns.insertAll(
+                snapshot.patterns.map {
+                    PatternEntity(
+                        id = it.id,
+                        name = it.name,
+                        anchorDay = it.anchorDay,
+                        slots = SlotCodec.encode(it.slots),
+                        slotCount = it.slots.size,
+                        isActive = it.isActive,
+                        createdAt = stamp(it.createdAtMillis),
+                        updatedAt = stamp(it.updatedAtMillis),
+                    )
+                },
+            )
+            overrides.insertAll(
+                snapshot.changedDays.map {
+                    DayOverrideEntity(
+                        patternId = it.patternId,
+                        day = it.day,
+                        shiftTypeId = it.shiftTypeId,
+                        overridesShift = it.overridesShift,
+                        note = it.note,
+                        createdAt = stamp(it.createdAtMillis),
+                        updatedAt = stamp(it.updatedAtMillis),
+                    )
+                },
+            )
+            appMeta.putAll(snapshot.settings.map { AppMetaEntity(it.key, it.value) })
+        }
     }
 
     // ------------------------------------------------------------------ setup

@@ -23,12 +23,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,9 +56,15 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.AdGate
+import com.turnus.rota.data.BackupSummary
 import com.turnus.rota.data.ShiftStyle
+import com.turnus.rota.share.RotaBackupFile
 import com.turnus.rota.ui.theme.TurnusTokens
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /** The lead times worth offering. More than this is a picker nobody wants. */
 private val LEAD_CHOICES = listOf(
@@ -73,7 +81,7 @@ private val LEAD_CHOICES = listOf(
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
-    onRemindersChanged: () -> Unit,
+    onRotaChanged: () -> Unit,
     onEditShifts: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -114,13 +122,53 @@ fun SettingsScreen(
         notificationsAllowed = granted
         // Turning the switch on without the permission would be a lie: the
         // alarms fire and post nothing. The setting follows what can happen.
-        if (!granted) viewModel.setEnabled(false, onRemindersChanged)
+        if (!granted) viewModel.setEnabled(false, onRotaChanged)
     }
+
+    val backup by viewModel.backup.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
+
+    // CreateDocument with a name, OpenDocument without a filter. The picker is
+    // the whole storage story here: it grants this one file and nothing else,
+    // so the app needs no storage permission at all.
+    val saveBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(RotaBackupFile.MIME),
+    ) { uri -> if (uri != null) viewModel.saveBackup(context, uri) }
+
+    val openBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.openBackup(context, uri) }
+
+    LaunchedEffect(Unit) { viewModel.checkUndoAvailable(context) }
 
     LaunchedEffect(error) {
         val message = error ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
         viewModel.clearError()
+    }
+
+    LaunchedEffect(notice) {
+        val current = notice ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = current.text,
+            // The one place an Undo is genuinely needed, so it is offered where
+            // the user is already looking rather than filed under a menu.
+            actionLabel = if (current.undoable) "Undo" else null,
+            duration = if (current.undoable) SnackbarDuration.Long else SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.undoRestore(context, onRotaChanged)
+        }
+        viewModel.clearNotice()
+    }
+
+    backup.pending?.let { pending ->
+        RestoreConfirmation(
+            summary = pending.summary,
+            busy = backup.busy,
+            onConfirm = { viewModel.confirmRestore(context, onRotaChanged) },
+            onDismiss = viewModel::cancelRestore,
+        )
     }
 
     Scaffold(
@@ -161,7 +209,7 @@ fun SettingsScreen(
                                 // never on launch, when it means nothing yet.
                                 requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             }
-                            viewModel.setEnabled(wanted, onRemindersChanged)
+                            viewModel.setEnabled(wanted, onRotaChanged)
                         },
                         modifier = Modifier.semantics {
                             contentDescription = "Shift reminders"
@@ -178,7 +226,7 @@ fun SettingsScreen(
                     ChoiceRow(
                         choices = LEAD_CHOICES,
                         selected = state.settings.leadMinutes,
-                        onSelect = { viewModel.setLeadMinutes(it, onRemindersChanged) },
+                        onSelect = { viewModel.setLeadMinutes(it, onRotaChanged) },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -198,7 +246,7 @@ fun SettingsScreen(
                                 shift = shift,
                                 on = shift.id !in state.settings.mutedShiftTypeIds,
                                 onChange = { on ->
-                                    viewModel.setShiftMuted(shift.id, !on, onRemindersChanged)
+                                    viewModel.setShiftMuted(shift.id, !on, onRotaChanged)
                                 },
                             )
                         }
@@ -299,6 +347,56 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(Modifier.height(18.dp))
+            Text("Backup", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Save a copy of your rota", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Turnus keeps your rota on this phone and nowhere else, so a " +
+                        "new phone starts empty. Save a file now and you can put " +
+                        "everything back later — your pattern, your shifts, every " +
+                        "day you have changed.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !backup.busy,
+                        onClick = { saveBackup.launch(RotaBackupFile.suggestedName()) },
+                    ) {
+                        Text(if (backup.busy) "Working…" else "Save a backup")
+                    }
+                    OutlinedButton(
+                        enabled = !backup.busy,
+                        // Unfiltered: providers disagree about what a .json file
+                        // is called, and a filter that hides the user's own
+                        // backup is worse than one that shows too much.
+                        onClick = { openBackup.launch(arrayOf("*/*")) },
+                    ) {
+                        Text("Restore")
+                    }
+                }
+                if (backup.canUndo) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Your rota from just before the last restore is still saved " +
+                            "on this phone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        enabled = !backup.busy,
+                        onClick = { viewModel.undoRestore(context, onRotaChanged) },
+                    ) {
+                        Text("Undo the last restore")
+                    }
+                }
+            }
+
             // Outside the reminders block: consent has nothing to do with
             // whether the user wants reminders, and burying the only way to
             // withdraw it behind an unrelated switch would not be offering it.
@@ -326,6 +424,84 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/**
+ * The last thing between a picked file and the user's whole rota.
+ *
+ * It describes the *contents* of the backup rather than asking "are you sure?".
+ * A file picker shows names, and names are the least reliable thing about a
+ * file — someone with four backups needs to see which rota is in this one, not
+ * be asked to confirm a decision they have no information about.
+ */
+@Composable
+private fun RestoreConfirmation(
+    summary: BackupSummary,
+    busy: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        // Not dismissable mid-write: the database is being replaced.
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Restore this backup?") },
+        text = {
+            Column {
+                Text(
+                    buildString {
+                        append(summary.patternName ?: "A rota")
+                        if (summary.cycleLength > 0) {
+                            append(" — ").append(summary.cycleLength).append("-day cycle")
+                        }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    buildString {
+                        append(summary.shiftTypeCount).append(" shift")
+                        if (summary.shiftTypeCount != 1) append("s")
+                        append(", ").append(summary.changedDayCount).append(" changed day")
+                        if (summary.changedDayCount != 1) append("s")
+                        savedOn(summary.createdAtMillis)?.let { append("\nSaved ").append(it) }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "This replaces the rota on this phone. You can undo it straight " +
+                        "afterwards if it is the wrong file.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !busy) {
+                Text(if (busy) "Restoring…" else "Replace my rota")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * When the backup was written, in the reader's own locale and zone.
+ *
+ * This is an audit timestamp — epoch milliseconds — not a rota date, so
+ * converting it through a zone is exactly right here and would be exactly
+ * wrong two files away.
+ */
+private fun savedOn(millis: Long): String? {
+    if (millis <= 0L) return null
+    return runCatching {
+        Instant.ofEpochMilli(millis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+    }.getOrNull()
 }
 
 /**

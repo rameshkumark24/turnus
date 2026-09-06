@@ -4,6 +4,13 @@
   wakes the device to honour it, which for a calendar that changes at midnight
   is a lot of battery for nothing. The app, the daily worker and the boot
   receiver push updates instead, at the moments the content actually changes.
+
+  initialLayout is our own placeholder rather than Glance's default loading
+  layout. Several launchers — Funtouch among them — render initialLayout as the
+  picker preview and ignore previewImage and previewLayout entirely, so the
+  default showed a blank white spinner where the widget should be. It is also
+  what a freshly placed widget shows for its first frame, so a plausible layout
+  beats a loading circle in both places.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
@@ -18,13 +25,4 @@
     android:description="@string/widget_description"
     android:previewImage="@drawable/widget_preview_image"
     android:previewLayout="@layout/widget_preview"
-    
-    <!--
-      Our own placeholder, not Glance.s default loading layout. Several
-      launchers - Funtouch among them - render initialLayout as the picker
-      preview and ignore previewImage and previewLayout entirely, so the
-      default showed a blank white spinner where the widget should be. It is
-      also what a freshly placed widget shows for its first frame, so a
-      plausible layout beats a loading circle in both places.
-    -->
     android:initialLayout="@layout/widget_preview" />

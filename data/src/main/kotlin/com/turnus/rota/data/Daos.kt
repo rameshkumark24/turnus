@@ -41,6 +41,17 @@ interface ShiftTypeDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAllIgnoring(shiftTypes: List<ShiftTypeEntity>)
 
+    /**
+     * Restore only. ABORT, not IGNORE: a backup with two shifts sharing a
+     * letter must fail the whole restore, not quietly drop one of them and
+     * leave a pattern pointing at a shift that no longer exists.
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(shiftTypes: List<ShiftTypeEntity>)
+
+    @Query("DELETE FROM shift_type")
+    suspend fun deleteAll()
+
     @Update
     suspend fun update(shiftType: ShiftTypeEntity)
 
@@ -69,8 +80,14 @@ interface PatternDao {
     @Upsert
     suspend fun upsert(pattern: PatternEntity)
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(patterns: List<PatternEntity>)
+
     @Query("DELETE FROM pattern WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM pattern")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -103,6 +120,12 @@ interface DayOverrideDao {
     @Upsert
     suspend fun upsert(override: DayOverrideEntity)
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(overrides: List<DayOverrideEntity>)
+
+    @Query("DELETE FROM day_override")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM day_override WHERE pattern_id = :patternId AND day = :day")
     suspend fun delete(patternId: String, day: Long)
 
@@ -118,6 +141,12 @@ interface AppMetaDao {
 
     @Upsert
     suspend fun put(meta: AppMetaEntity)
+
+    @Upsert
+    suspend fun putAll(meta: List<AppMetaEntity>)
+
+    @Query("DELETE FROM app_meta")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM app_meta")
     suspend fun getAll(): List<AppMetaEntity>
