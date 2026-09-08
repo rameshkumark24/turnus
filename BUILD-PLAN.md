@@ -190,7 +190,7 @@ WHY FIRST: The feature the product's positioning rests on currently ships
 switched off behind a scroll. Everything else on this list is smaller.
 
 ## Phase 13 — The sharp edges
-STATUS: NOT STARTED
+STATUS: DONE
 GOAL: The four small failures that make the app look unreliable are gone.
 BUILD:
 - Strip whitespace, line breaks and zero-width characters from a pasted share
@@ -209,6 +209,29 @@ DONE WHEN: A code with embedded newlines imports; a notification tapped from
 the Settings screen lands on the calendar.
 DEPENDS ON: 10
 PLAN MODE: no
+VERIFIED: On the vivo V2307 (Android 15), all four.
+
+- The mangled code imported. Typed into the real field across four lines, and
+  the vivo keyboard added a space after `v1.` unprompted — a better test than the
+  one intended. Preview read *"Wrapped nights — 6-day cycle"* and the import
+  landed.
+- A real reminder, from a real exact alarm at 21:00, tapped from the Settings
+  screen, landed on the calendar **and moved the grid from December back to
+  September**. Firing the same intent for 15 November steered it to November, so
+  the day in the intent drives the month rather than it merely resetting.
+- Rotating the phone on the Settings screen did **not** drag the user back to the
+  calendar, which is what the `savedInstanceState == null` guard is for.
+- Ordering: a restored backup with every shift tied on `sort_order` read five
+  times in a row gave one order, ascending by id.
+
+NOT VERIFIED: the new *"could not be opened"* message has never been seen on a
+screen. Every `openInputStream` failure now reaches it and the branch compiles,
+but the trigger — a cloud placeholder that has not downloaded — could not be
+manufactured on this device: deleting the file also removed the provider row, and
+this picker offers no *Recent* root. What was checked instead is that the branch
+it replaces still behaves: a picked PDF still says *"That file is not a Turnus
+backup"*, and a real backup still previews. **Worth one look with a genuine
+undownloaded Drive file before release.**
 
 ## Phase 14 — Verify the two things I reasoned about but never ran
 STATUS: NOT STARTED
@@ -291,17 +314,20 @@ cutting it saves an hour and keeps two unknowns in a shipping product.
 
 *Update this section at the end of every phase.*
 
-**Last updated:** after Phase 12, before Phase 13.
+**Last updated:** after Phase 13, before Phase 14.
 
 ## What is built
 
 The app is **feature-complete for v1** and verified on a physical device (vivo
 V2307) and an emulator.
 
-- **`:engine`** — 130 tests, pure JVM, property-based over thousands of
+- **`:engine`** — 135 tests, pure JVM, property-based over thousands of
   generated cases per run.
-- **`:data`** — 38 instrumented tests against real SQLite, including a
+- **`:data`** — 39 instrumented tests against real SQLite, including a
   migration test that proves an upgrade preserves existing rows.
+- **`:app`** — 11 JVM tests over what a messaging app does to a pasted share
+  code. New source set in Phase 13; `RotaCode.read` is pure string handling, so
+  these run in milliseconds rather than on a device.
 - **`:app`** — setup wizard, month grid, day editor, next-shift card, year view,
   reminders, shift editor, rota editor, hours, backup and restore, share and
   import by code, calendar export, delete-everything, adverts and consent.
@@ -318,16 +344,36 @@ V2307) and an emulator.
 
 ## Known-wrong, deliberately not yet fixed
 
-- A pasted share code broken across lines by a messaging app fails to decode.
-- A cloud backup file that has not downloaded is reported as *"not a Turnus
-  backup"*.
-- A notification tapped while the app is open lands on the wrong screen.
-- Shift ordering has no tiebreaker.
+All four items that stood here were fixed in Phase 13. Nothing has replaced them.
+
+The two remaining `unverified` behaviours are Phase 14's job: the midnight
+rollover with the app left open, and the widget after a full delete-everything.
 
 ## Blocked on you, not on code
 
 AdMob IDs · an upload keystore · hosting the privacy policy · Play production
 access · the decision in Phase 15 about naming a profession.
+
+## Carried forward from Phase 13
+
+- **The "could not be opened" message is written but unseen.** It is reached by
+  every read failure and the wording is deliberate, but a real undownloaded cloud
+  file was not reproducible on the vivo. This is the one thing in Phase 13 taken
+  on reasoning rather than observation.
+- **Reading a pasted code is now deliberately lenient**, and leniency has a
+  ceiling. Whitespace and the whole `Cf` category are stripped, and a blank line
+  is treated as the boundary between chatter and code. What still fails is a
+  token hard-wrapped *and* surrounded by prose with no blank line between them —
+  strip the spaces there and the sentence runs into the token. That is a real
+  gap, left open on purpose: closing it means guessing where prose ends, and a
+  wrong guess silently imports the wrong rota.
+- **The vivo was withholding `SCHEDULE_EXACT_ALARM`** on a fresh install, and the
+  app said so in Settings and offered the way to grant it. Granting it made the
+  notice disappear and the alarm fired at 21:00:00 to the second. That is the
+  §11 degrade-and-say-so path working on the handset it was written for — the
+  first time it has been seen on real hardware rather than an emulator.
+- **The widget agreed with an imported rota** without being asked to. Noted as a
+  free observation, not a test: it is Phase 14's second item.
 
 ## Carried forward from Phase 12
 
@@ -348,4 +394,7 @@ access · the decision in Phase 15 about naming a profession.
 
 ## Next
 
-**Phase 13 — The sharp edges.**
+**Phase 14 — Verify the two things I reasoned about but never ran.** No
+production code expected: the midnight rollover with the app left open, and the
+widget after a full delete-everything. Add to it the one item Phase 13 could not
+observe — the *"could not be opened"* message against a real cloud file.

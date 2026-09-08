@@ -2,11 +2,13 @@ package com.turnus.rota.share
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import com.turnus.rota.data.BackupResult
 import com.turnus.rota.data.BackupSnapshot
 import com.turnus.rota.data.RotaBackup
 import com.turnus.rota.data.RotaRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -47,6 +49,8 @@ object RotaBackupFile {
 
     private const val UNDO_FILE = "rota-before-restore.json"
 
+    private const val TAG = "RotaBackupFile"
+
     private val FILE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     /** Dated, because people keep several and need to tell them apart. */
@@ -64,7 +68,18 @@ object RotaBackupFile {
             stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
         }
 
-    /** Never throws for bad content — a picked file is whatever the user picked. */
+    /**
+     * Never throws for bad content — a picked file is whatever the user picked.
+     *
+     * Failing to *open* the file and failing to *understand* it are reported
+     * differently, and the difference is not pedantry. Cloud folders hand the
+     * picker a placeholder for a file that is not on the phone yet; opening it
+     * triggers a download that can fail, and every one of those failures used
+     * to arrive here as "that file is not a Turnus backup" — said about the
+     * user's only copy of their rota. Size is the one exception that stays
+     * [BackupResult.NotABackup]: a file this large was read successfully and is
+     * a video, not a backup.
+     */
     suspend fun read(context: Context, source: Uri): BackupResult =
         withContext(Dispatchers.IO) {
             val text = try {
@@ -82,12 +97,20 @@ object RotaBackupFile {
                         if (buffer.size() > MAX_BYTES) return@withContext BackupResult.NotABackup
                     }
                     buffer.toString(Charsets.UTF_8.name())
-                } ?: return@withContext BackupResult.NotABackup
-            } catch (_: java.io.IOException) {
-                return@withContext BackupResult.NotABackup
-            } catch (_: SecurityException) {
-                // The grant expired — a picker result held across process death.
-                return@withContext BackupResult.NotABackup
+                } ?: return@withContext BackupResult.Unreadable
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                // Deliberately broad. Between the picker and the bytes sits a
+                // provider from another app — a cloud client, a file manager,
+                // a vendor gallery — and it can fail in ways this app cannot
+                // enumerate: a download that never completes, a grant that
+                // expired while the picker result waited through process
+                // death, or its own crash surfacing as any RuntimeException.
+                // None of those are worth taking the app down for, and none of
+                // them are evidence about the file's contents.
+                Log.i(TAG, "could not read the picked file", failure)
+                return@withContext BackupResult.Unreadable
             }
             RotaBackup.decode(text)
         }

@@ -248,6 +248,111 @@ class ShareLinkTest {
 
     // ---------------------------------------------------------------- helpers
 
+    // ------------------------------------------------- what a paste does to it
+
+    /**
+     * The property behind the whole fix: a token is what it is, whatever a
+     * messaging app did to its layout on the way.
+     *
+     * Invisible characters are injected at random positions in a real token —
+     * including position zero and the very end — and the decoded rota must be
+     * indistinguishable from the one that was encoded. Anything less than a
+     * property test here misses the one case that matters, which is a break
+     * landing exactly on the version dot.
+     */
+    @Test
+    fun `survives anything invisible inserted anywhere in the token`() {
+        val rnd = Random(SEED)
+        repeat(5_000) {
+            val original = randomPattern(rnd)
+            val token = ShareLink.encode(original, defsFor(original))
+
+            val mangled = buildString {
+                append(token)
+                repeat(rnd.nextInt(1, 6)) {
+                    val where = rnd.nextInt(0, length + 1)
+                    insert(where, INVISIBLE[rnd.nextInt(INVISIBLE.size)])
+                }
+            }
+
+            val decoded = ShareLink.decode(mangled)
+            val success = assertIs<ShareLinkResult.Success>(
+                decoded,
+                "failed for $original mangled as ${mangled.map { it.code }}",
+            )
+            assertEquals(original.anchor, success.anchor)
+            assertEquals(original.name, success.name)
+            assertEquals(original.slots, success.codes)
+        }
+    }
+
+    /** The reported case: a client hard-wrapped the token onto two lines. */
+    @Test
+    fun `decodes a token broken across lines`() {
+        val original = fourOnFourOff()
+        val token = ShareLink.encode(original, defsFor(original))
+        val wrapped = token.chunked(24).joinToString("\r\n")
+
+        val success = assertIs<ShareLinkResult.Success>(ShareLink.decode(wrapped))
+        assertEquals(original.slots, success.codes)
+        assertEquals(original.anchor, success.anchor)
+    }
+
+    /**
+     * A shift letter may legitimately be a space, and the name may contain
+     * anything at all. Stripping happens to the *token*, which is Base64 —
+     * never to the payload, which is what those live in.
+     */
+    @Test
+    fun `stripping does not reach inside the payload`() {
+        val pattern = Pattern(
+            id = "p",
+            name = "  Nights\u00a0and\ndays  ",
+            anchor = DayNumber.of(2026, 3, 29),
+            slots = listOf("a", null, "a"),
+        )
+        val definitions = mapOf("a" to ShiftDefinition(id = "a", code = " ", name = "Space"))
+
+        val success = assertIs<ShareLinkResult.Success>(
+            ShareLink.decode(ShareLink.encode(pattern, definitions)),
+        )
+        assertEquals("  Nights\u00a0and\ndays  ", success.name)
+        assertEquals(listOf(" ", null, " "), success.codes)
+    }
+
+    /**
+     * Prose is a broken code, not a code from the future.
+     *
+     * With whitespace now stripped before the version is read, an ordinary
+     * sentence containing a full stop would otherwise be reported as
+     * "made by a newer version of Turnus" — sending the user to the Play Store
+     * to fix a message they pasted by accident.
+     */
+    @Test
+    fun `prose is malformed rather than a version complaint`() {
+        listOf(
+            "Hi mate. Here is my rota",
+            "See you at 6. Cheers",
+            "turnus.rota",
+            "My rota - 4 on, 4 off (8-day cycle).",
+        ).forEach {
+            assertEquals(ShareLinkResult.Malformed, ShareLink.decode(it), "for '$it'")
+        }
+    }
+
+    /** But a real version from the future still says so. */
+    @Test
+    fun `a genuine newer version is still reported as one`() {
+        assertEquals(
+            ShareLinkResult.UnsupportedVersion("v2"),
+            ShareLink.decode("v2.YW55dGhpbmc"),
+        )
+        assertEquals(
+            ShareLinkResult.UnsupportedVersion("v10"),
+            ShareLink.decode("  v10 . YW55dGhpbmc  "),
+        )
+    }
+
     /**
      * A definition for every id the pattern uses, lettered with the id itself.
      *
@@ -279,6 +384,19 @@ class ShareLinkTest {
 
     private companion object {
         const val SEED = 20260904L
+
+        /**
+         * What actually arrives in a paste: hard wraps, the non-breaking space
+         * several clients wrap with, the zero-width space and joiners, the
+         * bidirectional marks, the byte-order mark, and the soft hyphen a text
+         * renderer leaves at a wrap point.
+         */
+        val INVISIBLE = listOf(
+            ' ', '\t', '\n', '\r',
+            '\u00a0', '\u00ad', '\u2007', '\u202f',
+            '\u200b', '\u200c', '\u200d', '\u200e', '\u200f', '\ufeff',
+        )
+
         val NAMES = listOf(
             "4 on, 4 off",
             "Spätschicht",

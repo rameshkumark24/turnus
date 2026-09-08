@@ -12,10 +12,23 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShiftTypeDao {
 
-    @Query("SELECT * FROM shift_type ORDER BY sort_order ASC")
+    /**
+     * `id` breaks the tie, and is not decoration.
+     *
+     * `sort_order` is only unique because the code that assigns it is careful,
+     * and a restored backup is not written by that code — it is a file, and a
+     * file can be hand-edited, merged, or produced by a future version with a
+     * different idea of ordering. SQLite makes no promise about the order of
+     * rows that tie, so two shifts sharing a `sort_order` could come back in
+     * either order on any given read: the shift list would reshuffle between
+     * visits, the same rota would encode to two different share codes, and
+     * neither would look like a bug worth reporting. A second, always-unique
+     * key costs nothing and makes every read of this table repeatable.
+     */
+    @Query("SELECT * FROM shift_type ORDER BY sort_order ASC, id ASC")
     fun observeAll(): Flow<List<ShiftTypeEntity>>
 
-    @Query("SELECT * FROM shift_type ORDER BY sort_order ASC")
+    @Query("SELECT * FROM shift_type ORDER BY sort_order ASC, id ASC")
     suspend fun getAll(): List<ShiftTypeEntity>
 
     @Query("SELECT * FROM shift_type WHERE id = :id")
@@ -68,7 +81,8 @@ interface PatternDao {
     @Query("SELECT * FROM pattern WHERE is_active = 1 LIMIT 1")
     suspend fun getActive(): PatternEntity?
 
-    @Query("SELECT * FROM pattern ORDER BY created_at ASC")
+    /** `id` for the same reason [ShiftTypeDao.getAll] has it: this feeds a backup. */
+    @Query("SELECT * FROM pattern ORDER BY created_at ASC, id ASC")
     suspend fun getAll(): List<PatternEntity>
 
     @Query("SELECT * FROM pattern WHERE id = :id")

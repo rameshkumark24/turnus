@@ -293,6 +293,44 @@ class RotaBackupTest {
         assertNotNull(repository.overrideFor(DayNumber(20_100)))
     }
 
+    // ------------------------------------------------------------- stable order
+
+    /**
+     * Two shifts that tie on sort_order come back in the same order every time.
+     *
+     * A tie cannot happen through the app, which assigns sort_order by
+     * appending. It can happen through a file: a restored backup is written by
+     * whatever produced it, and this one is deliberately built the way a
+     * hand-edited or merged backup would be. SQLite promises nothing about the
+     * order of tied rows, so without a second key the shift list can reshuffle
+     * between two reads of an unchanged database — and the same rota can encode
+     * to two different share codes.
+     */
+    @Test
+    fun tiedShiftsComeBackInTheSameOrderEveryTime() = runBlocking {
+        seedRota()
+        val snapshot = repository.snapshot("test")
+        val tied = snapshot.shiftTypes.mapIndexed { index, shift ->
+            // Every one of them on the same rung.
+            shift.copy(id = "shift-${'a' + index}", sortOrder = 0)
+        }
+        // The pattern has to name the new ids, or validation refuses the file.
+        val byOldId = snapshot.shiftTypes.map { it.id }.zip(tied.map { it.id }).toMap()
+        repository.restore(
+            snapshot.copy(
+                shiftTypes = tied,
+                patterns = snapshot.patterns.map { pattern ->
+                    pattern.copy(slots = pattern.slots.map { it?.let(byOldId::getValue) })
+                },
+                changedDays = emptyList(),
+            ),
+        )
+
+        val reads = List(5) { repository.shiftStyles().map { it.id } }
+        assertEquals("order was not stable: $reads", 1, reads.distinct().size)
+        assertEquals(reads.first().sorted(), reads.first())
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private suspend fun seedRota(): Pattern {

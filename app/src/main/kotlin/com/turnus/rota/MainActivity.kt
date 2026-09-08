@@ -1,5 +1,6 @@
 package com.turnus.rota
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -26,6 +27,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.turnus.rota.ads.AdConfig
 import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.ui.RootState
 import com.turnus.rota.ui.RootViewModel
 import com.turnus.rota.ui.month.MonthScreen
@@ -42,12 +44,31 @@ import com.turnus.rota.ui.year.YearViewModel
 import com.turnus.rota.ui.theme.TurnusTheme
 import com.turnus.rota.widget.RotaWidgetReceiver
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * The day a notification tap asked for, or null.
+     *
+     * Compose state on the Activity rather than a read of `getIntent()` inside
+     * the composition: a tap that arrives while the app is already running goes
+     * to [onNewIntent], which recomposes nothing by itself, and reading the
+     * intent during composition would replay the same tap on every rotation.
+     * The counter makes two taps on the same day two distinct requests.
+     */
+    private var showDay by mutableStateOf<ShowDay?>(null)
+    private var showDayCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // Only on a real start. On a recreation — a rotation, a font-size
+        // change, the process coming back — the launching intent is delivered
+        // again, and acting on it a second time would drag the user back to the
+        // calendar from wherever they had since navigated.
+        if (savedInstanceState == null) consume(intent)
 
         val repository = (application as TurnusApplication).repository
 
@@ -61,10 +82,31 @@ class MainActivity : ComponentActivity() {
                         repository = repository,
                         onRotaChanged = ::syncReminders,
                         onCalendarShown = ::startAds,
+                        showDay = showDay,
                     )
                 }
             }
         }
+    }
+
+    /**
+     * A tap that arrived while the app was already running.
+     *
+     * setIntent so that anything reading the Activity's intent later sees the
+     * one that actually brought it forward, which is the documented contract
+     * and cheaper than finding out it is not.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consume(intent)
+    }
+
+    private fun consume(intent: Intent?) {
+        if (intent?.action != ACTION_SHOW_DAY) return
+        val day = intent.getLongExtra(EXTRA_DAY, Long.MIN_VALUE)
+        if (day == Long.MIN_VALUE) return
+        showDay = ShowDay(DayNumber(day), ++showDayCount)
     }
 
     /**
@@ -120,6 +162,14 @@ class MainActivity : ComponentActivity() {
                 .onFailure { Log.e("MainActivity", "could not refresh widget", it) }
         }
     }
+
+    companion object {
+        /** Set by [com.turnus.rota.notify.ReminderReceiver] on a notification tap. */
+        const val ACTION_SHOW_DAY = "com.turnus.rota.action.SHOW_DAY"
+
+        /** A [DayNumber] value — a civil day count, never epoch millis. */
+        const val EXTRA_DAY = "com.turnus.rota.extra.DAY"
+    }
 }
 
 /**
@@ -135,6 +185,7 @@ private fun TurnusApp(
     repository: RotaRepository,
     onRotaChanged: () -> Unit,
     onCalendarShown: () -> Unit,
+    showDay: ShowDay?,
 ) {
     // Three destinations now, all siblings of the calendar rather than a stack.
     // A navigation graph would buy argument passing and deep links, neither of
@@ -177,6 +228,17 @@ private fun TurnusApp(
             val monthViewModel: MonthViewModel = viewModel(
                 factory = remember(repository) { turnusViewModelFactory(repository) },
             )
+
+            // A notification tap lands on the calendar, on the month holding
+            // the shift it was about — both halves matter. Sending the user to
+            // the month view while it still shows whatever they last browsed to
+            // answers the tap with the wrong grid, which is the same failure
+            // wearing a different screen.
+            LaunchedEffect(showDay) {
+                val request = showDay ?: return@LaunchedEffect
+                monthViewModel.showMonth(YearMonth.from(request.day.toLocalDate()))
+                destination = Destination.Month
+            }
 
             when (destination) {
                 Destination.Month -> MonthScreen(
@@ -256,6 +318,16 @@ private fun TurnusApp(
         }
     }
 }
+
+/**
+ * A request to show one day, carrying its own identity.
+ *
+ * [sequence] is what makes two taps on the same day two events rather than one:
+ * without it a second tap is an equal value, the effect keyed on it in
+ * [TurnusApp] never re-runs, and someone who has since walked off to another
+ * screen stays there.
+ */
+private data class ShowDay(val day: DayNumber, val sequence: Int)
 
 /** The calendar's sibling screens. Not a stack — each one returns to the month. */
 private enum class Destination { Month, Year, Settings, Shifts, Pattern }

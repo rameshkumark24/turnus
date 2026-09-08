@@ -363,6 +363,16 @@ class SettingsViewModel(
                 BackupResult.NotABackup ->
                     _error.value = "That file is not a Turnus backup"
 
+                // Says what to do, not just what went wrong. The commonest
+                // cause by far is a backup sitting in a cloud folder that has
+                // not been downloaded to the phone yet, and the fix is
+                // something the user can carry out in the other app in a few
+                // seconds — but only if someone tells them that is the problem.
+                BackupResult.Unreadable ->
+                    _error.value = "That file could not be opened. If it is kept in Google Drive " +
+                        "or another cloud folder, open it there once so it downloads to this " +
+                        "phone, then pick it again."
+
                 is BackupResult.TooNew ->
                     _error.value = "That backup was made by a newer version of Turnus. Update the app first."
 

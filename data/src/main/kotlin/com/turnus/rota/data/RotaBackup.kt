@@ -378,6 +378,19 @@ sealed interface BackupResult {
     /** Not a Turnus backup at all — a photo, a document, the wrong file. */
     data object NotABackup : BackupResult
 
+    /**
+     * The file could not be read, so nothing is known about what is in it.
+     *
+     * Separate from [NotABackup] because the difference matters to the person
+     * standing in front of it. A backup kept in Google Drive or OneDrive is a
+     * placeholder until something opens it, and picking one that has not
+     * finished downloading fails at the stream, not at the parser — telling
+     * that user "this is not a Turnus backup" is both wrong and alarming,
+     * because the file they are looking at is their entire rota. The honest
+     * answer is that it could not be opened, and that waiting may fix it.
+     */
+    data object Unreadable : BackupResult
+
     /** A backup from a newer release. Say so; do not guess at the parts we know. */
     data class TooNew(val version: Int) : BackupResult
 

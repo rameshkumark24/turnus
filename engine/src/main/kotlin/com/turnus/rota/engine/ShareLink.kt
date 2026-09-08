@@ -55,6 +55,9 @@ object ShareLink {
     private const val CODE_SEPARATOR = ','
     private const val RADIX = 36
 
+    /** `v` and digits, nothing else — see the version check in [decode]. */
+    private val VERSION_SHAPE = Regex("v[0-9]+")
+
     /**
      * @param definitions every shift type the pattern's slots can name, keyed by
      *   id. The letters come from here.
@@ -100,12 +103,23 @@ object ShareLink {
 
     /** Never throws. Every malformed input is a result, because the input is something a stranger typed. */
     fun decode(token: String): ShareLinkResult {
-        val trimmed = token.trim().removePrefix("#")
+        val trimmed = token.withoutInvisibles().removePrefix("#")
         val dot = trimmed.indexOf('.')
         if (dot <= 0 || dot == trimmed.lastIndex) return ShareLinkResult.Malformed
 
         val version = trimmed.substring(0, dot)
-        if (version != VERSION) return ShareLinkResult.UnsupportedVersion(version)
+        if (version != VERSION) {
+            // "A newer version" only if it actually looks like one. Without
+            // this, any sentence containing a full stop is reported as a code
+            // from the future — and since whitespace is now stripped before
+            // this point, a pasted message that merely *mentions* the app would
+            // qualify. Prose is a malformed code, not a version problem.
+            return if (VERSION_SHAPE.matches(version)) {
+                ShareLinkResult.UnsupportedVersion(version)
+            } else {
+                ShareLinkResult.Malformed
+            }
+        }
 
         val payload = try {
             String(Base64.getUrlDecoder().decode(trimmed.substring(dot + 1)), Charsets.UTF_8)
@@ -136,6 +150,38 @@ object ShareLink {
             name = parts[3],
             codes = slots,
         )
+    }
+
+    /**
+     * Removes every character that carries no meaning but survives a paste.
+     *
+     * A code travels through a messaging app, an email client and a clipboard
+     * before it gets here, and each of them is entitled to break a long
+     * unbroken string across lines. What arrives is the same token with a
+     * newline in the middle of it, and Base64 has no opinion about whitespace
+     * other than to reject it — so the user is told their workmate's rota is
+     * not a rota, in the one flow that gets this app its next user for free.
+     *
+     * Three families go, not one:
+     *
+     * - whitespace, including the Unicode space separators, for hard wrapping;
+     * - non-breaking space, which `Char.isWhitespace` deliberately excludes and
+     *   which is what several clients insert when they wrap;
+     * - the format category `Cf` — zero-width space and joiners, the
+     *   bidirectional marks, the byte-order mark, and the soft hyphen that
+     *   text renderers leave behind at a wrap point.
+     *
+     * Stripping these cannot turn one valid token into a different valid one,
+     * because none of them are in the token's alphabet. It can only rejoin a
+     * token that was whole when it was sent.
+     */
+    private fun String.withoutInvisibles(): String = buildString(length) {
+        this@withoutInvisibles.forEach { ch ->
+            val invisible = ch.isWhitespace() ||
+                Character.isSpaceChar(ch) ||
+                Character.getType(ch) == Character.FORMAT.toInt()
+            if (!invisible) append(ch)
+        }
     }
 
     /**

@@ -58,29 +58,51 @@ object RotaCode {
      *
      * Accepts a bare token, a token with surrounding chatter, or a URL — people
      * paste the whole message, and picking the code out of it is this app's job
-     * rather than theirs.
+     * rather than theirs. It also accepts a token a messaging app or an email
+     * client broke across lines: [ShareLink.decode] removes whitespace and the
+     * invisible characters that wrapping leaves behind, so each candidate below
+     * is tried whole rather than in pieces.
+     *
+     * The candidates are ordered widest-net-last, and a real rota beats a
+     * version complaint: an early candidate that happens to look like a code
+     * from the future must not hide a good code further down the message.
      */
     fun read(pasted: String): ShareLinkResult {
         val trimmed = pasted.trim()
         if (trimmed.isEmpty()) return ShareLinkResult.Malformed
 
-        // A URL first: its fragment is the token, and the rest is not.
-        ShareLink.tokenFrom(trimmed)?.let { fromUrl ->
-            val result = ShareLink.decode(fromUrl)
-            if (result !is ShareLinkResult.Malformed) return result
+        val candidates = sequence {
+            // A URL first: its fragment is the token, and the rest is not.
+            ShareLink.tokenFrom(trimmed)?.let { yield(it) }
+
+            // The whole paste — the token on its own, however it was wrapped.
+            yield(trimmed)
+
+            // Pasted inside a message. A blank line is the one separator that
+            // survives every app that touches the message, so each paragraph is
+            // tried entire: that is what rejoins a token an email client hard
+            // wrapped, without swallowing the sentence after it.
+            yieldAll(trimmed.split(PARAGRAPH))
+
+            // Chatter on a single line: the word that looks like a token.
+            // Split on whitespace only, so a trailing full stop still fails
+            // cleanly rather than being trimmed into a different code.
+            yieldAll(trimmed.split(WHITESPACE).filter { it.contains('.') })
         }
 
-        val direct = ShareLink.decode(trimmed)
-        if (direct !is ShareLinkResult.Malformed) return direct
-
-        // Pasted inside a message: find the word that looks like a token. Split
-        // on whitespace only, so a trailing full stop still fails cleanly
-        // rather than being silently trimmed into a different code.
-        return trimmed.split(Regex("\\s+"))
-            .asSequence()
-            .filter { it.contains('.') }
-            .map(ShareLink::decode)
-            .firstOrNull { it !is ShareLinkResult.Malformed }
-            ?: ShareLinkResult.Malformed
+        var fromTheFuture: ShareLinkResult.UnsupportedVersion? = null
+        for (candidate in candidates) {
+            when (val result = ShareLink.decode(candidate)) {
+                is ShareLinkResult.Success -> return result
+                is ShareLinkResult.UnsupportedVersion -> fromTheFuture = fromTheFuture ?: result
+                ShareLinkResult.Malformed -> Unit
+            }
+        }
+        return fromTheFuture ?: ShareLinkResult.Malformed
     }
+
+    /** A blank line, however the sender's platform spells its line endings. */
+    private val PARAGRAPH = Regex("\\n[ \\t\\r]*\\n")
+
+    private val WHITESPACE = Regex("\\s+")
 }

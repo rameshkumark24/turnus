@@ -103,17 +103,35 @@ class ReminderReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openApp(context))
+            .setContentIntent(openCalendar(context, day))
             .build()
 
         NotificationManagerCompat.from(context).notify(day.value.toInt(), notification)
     }
 
-    private fun openApp(context: Context): PendingIntent =
+    /**
+     * Opens the calendar on the day the reminder is about.
+     *
+     * Two things were wrong with opening the app and stopping there. The flags
+     * reuse the running Activity, so someone who happened to be on the Settings
+     * screen got the Settings screen back and no sign of the shift they had
+     * just been told about; and the month on display is whatever they last
+     * browsed to, so a reminder tapped in December could land on a March grid.
+     * The day travels in the intent and [MainActivity] steers to it.
+     *
+     * The request code is the day, not zero. PendingIntent equality ignores
+     * extras, so with a fixed request code every notification on screen shares
+     * one PendingIntent, and FLAG_UPDATE_CURRENT rewrites all of them to the
+     * most recently posted day — two reminders pending overnight would both
+     * open the same one.
+     */
+    private fun openCalendar(context: Context, day: DayNumber): PendingIntent =
         PendingIntent.getActivity(
             context,
-            0,
+            day.value.toInt(),
             Intent(context, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_SHOW_DAY)
+                .putExtra(MainActivity.EXTRA_DAY, day.value)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )

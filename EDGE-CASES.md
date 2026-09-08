@@ -18,12 +18,12 @@ trusted.
 
 | # | Case | Likelihood | Damage | v1? |
 |---|---|---|---|---|
-| 1 | Reminders are **off by default** and buried in Settings | Certain | Severe — the headline feature is invisible | **Must** |
+| 1 | Reminders are **off by default** and buried in Settings | Certain | Severe — the headline feature is invisible | **Done** — Phase 12 |
 | 2 | Aggressive OEM battery management silently cancels alarms | Very likely on vivo/Xiaomi/Oppo/Samsung | Severe — missed shift | **Must** (partly done) |
 | 3 | User force-stops the app; alarms die until next manual open | Likely | Severe — silent, indefinite | **Must** (mitigate + explain) |
-| 4 | A cloud backup file that has not downloaded reports *"not a Turnus backup"* | Moderate | High — user believes their backup is corrupt | **Must** |
-| 5 | Share code mangled in transit by a messaging app | Likely | Medium — the growth loop fails | **Must** |
-| 6 | Notification tapped while app is open lands on the wrong screen | Likely | Low, but constant | **Must** — small |
+| 4 | A cloud backup file that has not downloaded reports *"not a Turnus backup"* | Moderate | High — user believes their backup is corrupt | **Done** — Phase 13 |
+| 5 | Share code mangled in transit by a messaging app | Likely | Medium — the growth loop fails | **Done** — Phase 13 |
+| 6 | Notification tapped while app is open lands on the wrong screen | Likely | Low, but constant | **Done** — Phase 13 |
 | 7 | Device timezone changes (travel, or a phone bought abroad) | Moderate | Medium — "today" moves | v1.1 |
 | 8 | Installing an older build over a newer database | Unlikely | Severe — crash on launch, no route out | v1.1 |
 | 9 | DST boundary changes real shift length | Certain, twice a year | Low — documented as rostered | Accepted |
@@ -108,7 +108,7 @@ solved by never trusting the thing that was scheduled.
 | Queued offline write conflicting on sync | — | **No instance** | None |
 | Row deleted while being edited | See §1 | | |
 | List changing under pagination | — | **No instance.** Nothing paginates; a month is 42 cells | None |
-| **Shift ordering ties** | Two shifts sharing a `sort_order` — reachable via a hand-edited backup — order undefined, list appears to shuffle between reads | Order by `sort_order`, then `id` | **Shift DAO** — `TRD.md` §3, small |
+| **Shift ordering ties** | Two shifts sharing a `sort_order` — reachable via a hand-edited backup — order undefined, list appears to shuffle between reads | Order by `sort_order`, then `id` | **Done** — Phase 13. Patterns got the same tiebreaker on `created_at`; verified by reading a tied table five times |
 | Zero: a 1-day cycle | Divide-by-zero or a blank grid | Valid — "work every day". Guarded by a minimum of one slot | None |
 | Zero: an all-off cycle | A calendar with no work | Refused at setup with *"Add at least one working day"*. **Already correct** | None |
 | Negative: browsing before the anchor | Negative modulo → index out of bounds → crash | True floor-modulo. **The single most likely bug in this codebase**, property-tested | None |
@@ -129,7 +129,7 @@ solved by never trusting the thing that was scheduled.
 | Apostrophe in a name | SQL injection, or a broken calendar file | Parameterised queries throughout; the calendar writer escapes per RFC 5545 with a deliberately careful escape order | None |
 | Pasted formatted text into a note | Markup stored verbatim | Stored as plain text; nothing renders it as markup | None |
 | **A file that is not what its extension claims** — picking a photo at the restore prompt | Reading a video into memory as text | Read is capped at 4 MB and aborts; result is *"That file is not a Turnus backup"* | None |
-| **A pasted share code with invisible characters** — messaging apps insert soft line breaks and zero-width characters | Decode fails; user is told their workmate's code is broken | Strip whitespace and non-token characters before decoding; the parser already tolerates surrounding chatter and URLs | **Code entry** — ranking #5 |
+| **A pasted share code with invisible characters** — messaging apps insert soft line breaks and zero-width characters | Decode fails; user is told their workmate's code is broken | Whitespace, the Unicode space separators and the whole `Cf` format category are stripped before decoding | **Done** — Phase 13. Property-tested over 5,000 tokens with invisibles injected at random positions |
 
 ## 7. Device
 
@@ -230,11 +230,11 @@ reliably".
 | Trigger | Unhandled | Should happen | Fix |
 |---|---|---|---|
 | Code from a **newer** app version | Partially parsed → a wrong rota | Reported as *"made by a newer version, update the app"*. A partially understood rota is worse than a refused one | None |
-| **Code broken across lines by a messaging app** | Decode fails, user blames the sender | Tolerate whitespace and invisible characters before decoding | **Code entry** — ranking #5 |
+| **Code broken across lines by a messaging app** | Decode fails, user blames the sender | Stripped before decoding, and a blank line is treated as the paragraph boundary so a token hard-wrapped *inside* a message is rejoined rather than split | **Done** — Phase 13. Verified on a vivo V2307, where the keyboard also inserted a space after `v1.` |
 | Code pasted with the whole surrounding message | Fails | Already tolerated — the parser finds the token in chatter or a URL | None |
 | Backup from a **newer** version | Silently ignores fields it does not know | Refused with a clear message, by format version | None |
 | Backup from an **older** version | Missing fields crash the parser | Absent fields default — which is how a backup written before unpaid breaks existed still restores today | None |
-| **A cloud file that has not downloaded** picked at the restore prompt | *"That file is not a Turnus backup"* — wrong and alarming | Distinguish a read failure from a parse failure and say *"That file could not be read — it may still be downloading"* | **Backup file reader** — ranking #4 |
+| **A cloud file that has not downloaded** picked at the restore prompt | *"That file is not a Turnus backup"* — wrong and alarming | A read failure is now `BackupResult.Unreadable`, reported as *"That file could not be opened. If it is kept in Google Drive or another cloud folder, open it there once so it downloads to this phone, then pick it again."* | **Done** — Phase 13. **The message is untested against a real undownloaded cloud file** — the branch is reached by every read failure, but the specific provider behaviour is reasoned, not observed |
 | The file changes between picking and confirming (synced folder) | Restores different bytes than were shown | The decoded snapshot is held and applied, not re-read. **Already correct** | None |
 | Calendar export into different calendar apps | Duplicate events on re-export | Stable per-day UIDs so re-import updates | None |
 | Share-sheet grant expires before the receiving app reads it | Export fails silently | Per-URI, per-share grant issued at share time | None |
@@ -262,14 +262,17 @@ reliably".
 
 ## What must be handled before v1
 
-1. **Surface reminders after setup** — the headline feature is currently off and hidden.
+1. ~~**Surface reminders after setup**~~ — done, Phase 12.
 2. **Explain force-stop and battery management** in the store listing, not only in Settings.
-3. **Tolerate mangled share codes** — strip whitespace and invisible characters before decoding.
-4. **Distinguish "could not read" from "not a backup"** at the restore prompt.
-5. **Route notification taps to the month view.**
-6. **Add the `id` tiebreaker to shift ordering.**
+   *Still open — this is copy, and it belongs to Phase 15.*
+3. ~~**Tolerate mangled share codes**~~ — done, Phase 13.
+4. ~~**Distinguish "could not read" from "not a backup"**~~ — done, Phase 13.
+5. ~~**Route notification taps to the month view**~~ — done, Phase 13. The tap now
+   also steers the grid to the month holding that shift, which was the same
+   defect wearing a different screen.
+6. ~~**Add the `id` tiebreaker to shift ordering**~~ — done, Phase 13.
 
-Items 3–6 are each small. Item 1 is a card and a preference. Item 2 is copy.
+**Only item 2 is left, and it is writing rather than code.**
 
 ## What is deliberately accepted for v1
 
