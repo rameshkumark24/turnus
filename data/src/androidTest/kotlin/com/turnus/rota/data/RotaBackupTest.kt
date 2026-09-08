@@ -8,6 +8,7 @@ import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Pattern
 import com.turnus.rota.engine.ReminderSettings
 import com.turnus.rota.engine.ShiftCode
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -211,6 +212,47 @@ class RotaBackupTest {
         assertEquals(before.patterns, after.patterns)
         assertEquals(before.changedDays, after.changedDays)
         assertEquals(pattern.id, repository.activePattern()?.id)
+    }
+
+    /**
+     * The offer is answered once. Turning reminders on and later off is an
+     * answer, so `enabled = false` alone must not bring the card back — which
+     * is why this is a separate fact from the reminder settings.
+     */
+    @Test
+    fun theReminderOfferIsRememberedIndependentlyOfTheSetting() = runBlocking {
+        seedRota()
+        assertEquals(false, repository.observeReminderPromptSeen().first())
+
+        repository.markReminderPromptSeen()
+        assertEquals(true, repository.observeReminderPromptSeen().first())
+
+        // Enabled then disabled again: still answered, still must not re-ask.
+        repository.saveReminderSettings(ReminderSettings(enabled = true))
+        repository.saveReminderSettings(ReminderSettings(enabled = false))
+        assertEquals(true, repository.observeReminderPromptSeen().first())
+    }
+
+    /** It travels with a backup, so restoring on a new phone does not re-ask. */
+    @Test
+    fun theReminderOfferSurvivesABackup() = runBlocking {
+        seedRota()
+        repository.markReminderPromptSeen()
+
+        repository.restore(roundTrip())
+
+        assertEquals(true, repository.observeReminderPromptSeen().first())
+    }
+
+    /** But a fresh start asks again — that is what "delete everything" means. */
+    @Test
+    fun deletingEverythingAsksAgain() = runBlocking {
+        seedRota()
+        repository.markReminderPromptSeen()
+
+        repository.deleteEverything()
+
+        assertEquals(false, repository.observeReminderPromptSeen().first())
     }
 
     @Test

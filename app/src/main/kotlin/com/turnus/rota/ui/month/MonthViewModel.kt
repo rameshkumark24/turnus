@@ -216,6 +216,70 @@ class MonthViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /**
+     * Whether to offer reminders on the calendar.
+     *
+     * Reminders are the reason a night worker keeps this app, and they ship
+     * switched off — because turning them on by default would spend Android's
+     * single permission prompt at a moment the user has asked for nothing.
+     * Off *and* buried in Settings meant nobody found them at all, which is
+     * the worst of both. So they are offered once, here, where the user has a
+     * populated calendar in front of them and the offer means something.
+     *
+     * Starts false so the card cannot flash on screen before the answer is
+     * known; the first real emission decides it.
+     */
+    val showReminderPrompt: StateFlow<Boolean> = combine(
+        repository.observeReminderSettings(),
+        repository.observeReminderPromptSeen(),
+    ) { settings, seen -> !seen && !settings.enabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
+    /**
+     * Turns reminders on and records that the offer was answered.
+     *
+     * Only ever called once the permission is actually held — a switch that
+     * says "on" while the alarms post nothing is a lie the user does not
+     * discover until they miss a shift.
+     */
+    fun enableReminders(onChanged: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.saveReminderSettings(repository.reminderSettings().copy(enabled = true))
+                repository.markReminderPromptSeen()
+                onChanged()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                _error.value = failure.message ?: "Could not turn reminders on"
+            }
+        }
+    }
+
+    /**
+     * Records that the offer was declined.
+     *
+     * A failure here is deliberately silent: the only consequence is that the
+     * card appears again next launch, which is the harmless direction to fail
+     * in, and an error message about a dismissal the user has already moved on
+     * from would be noise.
+     */
+    fun dismissReminderPrompt() {
+        viewModelScope.launch {
+            try {
+                repository.markReminderPromptSeen()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // See above.
+            }
+        }
+    }
+
     fun openDay(day: DayNumber) {
         launchGuarded("Could not open that day") {
             val pattern = repository.activePattern() ?: return@launchGuarded

@@ -1,5 +1,11 @@
 package com.turnus.rota.ui.month
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -37,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.BannerSlot
 import com.turnus.rota.data.ShiftStyle
@@ -64,8 +73,24 @@ fun MonthScreen(
     viewModel: MonthViewModel,
     onOpenSettings: () -> Unit,
     onOpenYear: () -> Unit,
+    onRotaChanged: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val showReminderPrompt by viewModel.showReminderPrompt.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // The one ask Android allows, spent only on an explicit tap. Refusing is a
+    // complete answer: the card is retired either way, because asking twice is
+    // nagging and the second prompt is suppressed by the system in any case.
+    // Reminders are *not* switched on when it is refused — a switch that reads
+    // "on" while the alarms post nothing is a lie nobody notices until they
+    // have missed a shift.
+    val requestNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) viewModel.enableReminders(onRotaChanged) else viewModel.dismissReminderPrompt()
+    }
+
     val sheet by viewModel.sheet.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -143,6 +168,21 @@ fun MonthScreen(
                         heightBudget = budget,
                     )
                     Spacer(Modifier.height(12.dp))
+                    // Above the other cards, and only ever once: it is a
+                    // question, and a question below the fold is not asked.
+                    if (showReminderPrompt) {
+                        ReminderPromptCard(
+                            onEnable = {
+                                if (notificationsAlreadyAllowed(context)) {
+                                    viewModel.enableReminders(onRotaChanged)
+                                } else {
+                                    requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                            onDismiss = viewModel::dismissReminderPrompt,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     NextShiftCard(outlook = outlook, styles = state.styles)
                     Spacer(Modifier.height(10.dp))
                     HoursCard(state)
@@ -590,6 +630,62 @@ private fun formatHours(total: Hours.Total): String = buildString {
         append(" h ").append(total.minutesPastTheHour).append(" m")
     }
 }
+
+/**
+ * The one-time offer of reminders.
+ *
+ * Shaped like the cards around it rather than as a banner or a dialog: it is
+ * information about the user's rota, in the place they already look, not an
+ * interruption. A dialog here would be an ad for our own feature.
+ */
+@Composable
+private fun ReminderPromptCard(
+    onEnable: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 13.dp)
+            .semantics(mergeDescendants = true) { },
+    ) {
+        Text(
+            text = "Want a reminder before every shift?",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            // What it does and what it costs them, in one line. No mention of
+            // it being free: the whole app is, and saying so here would read
+            // like a sales pitch on a calendar.
+            text = "A notification before you start, with as much warning as you like.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onEnable) { Text("Remind me") }
+            TextButton(onClick = onDismiss) { Text("Not now") }
+        }
+    }
+}
+
+/**
+ * True when a notification can actually be posted.
+ *
+ * The version guard is not decoration: POST_NOTIFICATIONS does not exist below
+ * API 33, where checkSelfPermission reports it denied. Without this, every
+ * device on Android 8 to 12 would be sent to a permission prompt that cannot
+ * be shown, and could never turn reminders on at all.
+ */
+private fun notificationsAlreadyAllowed(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
 
 private data class OutlookCopy(val headline: String, val detail: String?)
 

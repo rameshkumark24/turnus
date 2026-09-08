@@ -187,6 +187,28 @@ class RotaRepository(
     }
 
     /**
+     * Whether the user has already been offered reminders on the calendar.
+     *
+     * Deliberately a separate fact from `enabled`. Someone who turned reminders
+     * on and later off has answered the question, and must not be asked again;
+     * `enabled = false` alone cannot tell that apart from never having been
+     * asked. It lives in `app_meta` rather than in [ReminderSettings] because
+     * it records what the app has done, not what the user has configured.
+     *
+     * Being in `app_meta` also gives it the two behaviours it should have:
+     * "delete everything" clears it, so a fresh start asks again, and a backup
+     * carries it, so restoring on a new phone does not re-ask.
+     */
+    fun observeReminderPromptSeen(): Flow<Boolean> =
+        appMeta.observeAll().map { rows ->
+            rows.any { it.key == REMINDER_PROMPT_SEEN && it.value == "true" }
+        }
+
+    suspend fun markReminderPromptSeen() {
+        appMeta.put(AppMetaEntity(REMINDER_PROMPT_SEEN, "true"))
+    }
+
+    /**
      * Everything the scheduler needs, read once and consistently.
      *
      * Read as four separate calls the rota could change between them, and the
@@ -738,6 +760,9 @@ class RotaRepository(
     }
 
     private companion object {
+        /** Not a reminder setting — see [observeReminderPromptSeen]. */
+        const val REMINDER_PROMPT_SEEN = "reminder.prompt_seen"
+
         const val COLOR_DAY = 0xFFE0A33C.toInt()
         const val COLOR_NIGHT = 0xFF3D5A80.toInt()
         const val COLOR_EARLY = 0xFF2A9D8F.toInt()

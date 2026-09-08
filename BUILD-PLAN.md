@@ -172,7 +172,7 @@ PLAN MODE: no
 ---
 
 ## Phase 12 — Make reminders discoverable
-STATUS: NOT STARTED
+STATUS: DONE
 GOAL: A new user is offered reminders once, on the calendar, instead of never
 finding them.
 BUILD: A dismissible card on the month view shown after setup completes, when
@@ -291,7 +291,7 @@ cutting it saves an hour and keeps two unknowns in a shipping product.
 
 *Update this section at the end of every phase.*
 
-**Last updated:** after Phase 11, before Phase 12.
+**Last updated:** after Phase 12, before Phase 13.
 
 ## What is built
 
@@ -300,7 +300,7 @@ V2307) and an emulator.
 
 - **`:engine`** — 130 tests, pure JVM, property-based over thousands of
   generated cases per run.
-- **`:data`** — 35 instrumented tests against real SQLite, including a
+- **`:data`** — 38 instrumented tests against real SQLite, including a
   migration test that proves an upgrade preserves existing rows.
 - **`:app`** — setup wizard, month grid, day editor, next-shift card, year view,
   reminders, shift editor, rota editor, hours, backup and restore, share and
@@ -318,8 +318,6 @@ V2307) and an emulator.
 
 ## Known-wrong, deliberately not yet fixed
 
-- **Reminders default to off** and are only reachable through Settings. This is
-  Phase 12 and it is the most important thing on this list.
 - A pasted share code broken across lines by a messaging app fails to decode.
 - A cloud backup file that has not downloaded is reported as *"not a Turnus
   backup"*.
@@ -331,6 +329,23 @@ V2307) and an emulator.
 AdMob IDs · an upload keystore · hosting the privacy policy · Play production
 access · the decision in Phase 15 about naming a profession.
 
+## Carried forward from Phase 12
+
+- **Dismissal is permanent.** "Not now" retires the card for good, and the only
+  way back is the Settings switch. That is deliberate — asking twice is nagging,
+  and Android suppresses a second permission prompt anyway — but it means a
+  mis-tap costs the user the feature until they go looking. Watch for it in
+  reviews; the cheap mitigation, if it bites, is to re-offer once after a month
+  rather than never.
+- **On a first run in a consent region the user answers two things in a row:**
+  the advert consent form, then the reminder card behind it. Correct in order —
+  the card is inline, not a dialog, so it waits — but it is two decisions in the
+  first ten seconds. Verified working; noted in case it reads as heavy.
+- **Phase 12 was verified on the emulator only.** The vivo was not connected.
+  The permission dialog and alarm scheduling behave the same, but the OEM
+  battery behaviour in `EDGE-CASES.md` §11 is exactly what an emulator cannot
+  show. Worth one run on the vivo before release.
+
 ## Next
 
-**Phase 12 — Make reminders discoverable.**
+**Phase 13 — The sharp edges.**

@@ -183,6 +183,7 @@ private fun TurnusApp(
                     viewModel = monthViewModel,
                     onOpenSettings = { destination = Destination.Settings },
                     onOpenYear = { destination = Destination.Year },
+                    onRotaChanged = onRotaChanged,
                 )
 
                 Destination.Year -> {
