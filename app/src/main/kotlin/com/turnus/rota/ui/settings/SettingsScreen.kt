@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -172,6 +173,45 @@ fun SettingsScreen(
             busy = backup.busy,
             onConfirm = { viewModel.confirmRestore(context, onRotaChanged) },
             onDismiss = viewModel::cancelRestore,
+        )
+    }
+
+    if (backup.confirmingDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!backup.busy) viewModel.cancelDeleteEverything() },
+            title = { Text("Delete everything?") },
+            text = {
+                Text(
+                    // Itemised, because "are you sure?" is not information. The
+                    // backup line is the one that matters: this is the only
+                    // action in the app with no undo, and the user may have a
+                    // file that makes it survivable.
+                    "Your rota, your shifts, every day you have changed and every " +
+                        "note will be removed from this phone, along with the copy " +
+                        "kept for undoing a restore.\n\n" +
+                        "This cannot be undone. If you have saved a backup file, " +
+                        "you can still restore from that.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.deleteEverything(context, onRotaChanged) },
+                    enabled = !backup.busy,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(if (backup.busy) "Deleting…" else "Delete everything")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = viewModel::cancelDeleteEverything,
+                    enabled = !backup.busy,
+                ) {
+                    Text("Keep my rota")
+                }
+            },
         )
     }
 
@@ -551,6 +591,34 @@ fun SettingsScreen(
                     OutlinedButton(onClick = { AdGate.showPrivacyOptions(activity) }) {
                         Text("Change my choices")
                     }
+                }
+            }
+
+            // Last on the screen, and the only destructive thing on it. Placed
+            // below the privacy section rather than beside the backup buttons,
+            // so a thumb reaching for "Save a backup" cannot land on it.
+            Spacer(Modifier.height(18.dp))
+            Text("Start again", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Delete everything on this phone", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Removes your rota, your shifts, every day you have changed " +
+                        "and your notes. Use it if you are handing this phone on, " +
+                        "or starting somewhere new.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    enabled = !backup.busy,
+                    onClick = viewModel::askToDeleteEverything,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Delete everything")
                 }
             }
 

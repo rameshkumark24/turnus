@@ -65,6 +65,8 @@ data class BackupUiState(
     val pendingImport: PendingImport? = null,
     /** True while the paste-a-code sheet is open. */
     val entering: Boolean = false,
+    /** True while the "delete everything" confirmation is on screen. */
+    val confirmingDelete: Boolean = false,
     /**
      * True while the rota an import replaced can still be put back.
      *
@@ -372,6 +374,31 @@ class SettingsViewModel(
 
     fun cancelRestore() {
         _backup.update { it.copy(pending = null) }
+    }
+
+    fun askToDeleteEverything() {
+        _backup.update { it.copy(confirmingDelete = true) }
+    }
+
+    fun cancelDeleteEverything() {
+        _backup.update { it.copy(confirmingDelete = false) }
+    }
+
+    /**
+     * Wipes the rota and the undo snapshot together.
+     *
+     * Both, or neither. The snapshot is a full copy of the rota including its
+     * notes, so deleting the database alone would leave the app holding exactly
+     * the data the user just asked it to forget.
+     */
+    fun deleteEverything(context: Context, onRotaChanged: () -> Unit) {
+        busy {
+            repository.deleteEverything()
+            RotaBackupFile.clearUndoSnapshot(context)
+            _backup.update { it.copy(confirmingDelete = false, canUndo = false) }
+            // Alarms were scheduled against a rota that no longer exists.
+            onRotaChanged()
+        }
     }
 
     fun confirmRestore(context: Context, onRotaChanged: () -> Unit) {

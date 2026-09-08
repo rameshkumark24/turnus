@@ -25,6 +25,44 @@ Package: `com.turnus.rota`. Android only. No backend, no accounts, no in-app pur
 5. **No destructive Room migrations outside debug.** `fallbackToDestructiveMigration`
    wipes user data. Copy the database file before every migration.
 
+## Product commitments — these are load-bearing, not preferences
+
+These came out of competitor research and a privacy audit. Each one is the
+reason something else in the app is the way it is, so breaking one quietly
+breaks the case for the app.
+
+6. **Nothing is ever locked behind a payment.** No Pro tier, no unlock, no
+   subscription — including a subscription to remove the ads. Competitors
+   paywall reminders and sell ad-removal subscriptions; "everything is free,
+   funded by one banner" is the only thing this app has that they cannot copy
+   without giving up revenue. It is also why there is no entitlement to
+   enforce, and therefore why this app needs no server. Adding a paid tier is
+   not a pricing change, it is an architecture change.
+
+7. **A day's note never leaves the device.** Not in the `.ics` export, not in
+   a share code, not in a log. Notes are free text and users record sickness,
+   hospital appointments and bereavements in them. `Overrides` deliberately
+   carries shift ids and not notes, which makes this structural; `IcsWriterTest`
+   holds it that way. The backup file is the single exception, because the user
+   chose where it goes and it is the only copy that can bring the notes back.
+
+8. **No pay or earnings calculation.** The hours figure is rostered time less
+   unpaid breaks, and the UI says so. The app cannot know about overtime, an
+   hour sent home early, or a shift someone covered, so a pay figure would be
+   confidently wrong in the direction of a wage dispute. Reviewers of other
+   apps ask for this; the answer is no.
+
+9. **No analytics SDK and no crash-reporting SDK.** The published privacy
+   policy states there are none. Adding one later silently falsifies a document
+   users were invited to trust, and changes the Play Data Safety answers.
+   Crash reporting is the tempting one at launch — it still needs an explicit
+   decision and a policy update, never a quiet dependency bump.
+
+10. **No rota scanning from photos or PDFs.** It needs a server and a per-scan
+    AI cost, and it serves people whose rota has no repeating cycle — who are
+    not this app's user. The pattern engine is the answer for the people this
+    app is for.
+
 ## Module layout
 
 ```

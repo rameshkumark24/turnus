@@ -214,6 +214,26 @@ class RotaBackupTest {
     }
 
     @Test
+    fun deleteEverythingLeavesAWorkingFirstRunApp() = runBlocking {
+        seedRota()
+        repository.setOverride(DayNumber(20_100), shiftTypeId = ShiftCode.NIGHT)
+        repository.setNote(DayNumber(20_101), "hospital")
+        repository.saveReminderSettings(ReminderSettings(enabled = true, leadMinutes = 120))
+
+        repository.deleteEverything()
+
+        // Gone: the rota, the changed days, the notes, the settings.
+        assertNull(repository.activePattern())
+        assertNull(repository.overrideFor(DayNumber(20_100)))
+        assertNull(repository.overrideFor(DayNumber(20_101)))
+        assertEquals(ReminderSettings(), repository.reminderSettings())
+
+        // But not broken: the default shifts are back, so what the user sees is
+        // a first run rather than an empty screen that looks like a bug.
+        assertEquals(4, repository.shiftDefinitions().size)
+    }
+
+    @Test
     fun restoreReplacesRatherThanMerges() = runBlocking {
         seedRota()
         repository.setOverride(DayNumber(20_100), shiftTypeId = ShiftCode.NIGHT)

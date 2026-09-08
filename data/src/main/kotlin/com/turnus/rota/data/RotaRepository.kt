@@ -673,6 +673,29 @@ class RotaRepository(
         }
     }
 
+    /**
+     * Removes everything the user has and returns the app to its first run.
+     *
+     * There has to be a way to do this from inside the app. Until now the only
+     * route was Android's own "clear storage", which is three levels into
+     * system settings and which most people will never find — so someone
+     * handing a phone on, or starting a new job, had no way to get their old
+     * rota off it.
+     *
+     * The shift types are reseeded rather than left empty, so what the user
+     * gets back is a working first-run app rather than an empty screen that
+     * looks broken.
+     */
+    suspend fun deleteEverything() = db.withTransaction {
+        // Overrides first: the RESTRICT foreign key to shift_type means
+        // clearing the shifts before the days that reference them fails.
+        overrides.deleteAll()
+        patterns.deleteAll()
+        shiftTypes.deleteAll()
+        appMeta.deleteAll()
+        seedDefaultsIfEmpty()
+    }
+
     // ------------------------------------------------------------------ setup
 
     /**

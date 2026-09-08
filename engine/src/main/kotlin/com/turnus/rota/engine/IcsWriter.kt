@@ -100,6 +100,15 @@ object IcsWriter {
             out += "DTEND;VALUE=DATE:${DATE.format((day.day + 1).toLocalDate())}"
         }
 
+        // SUMMARY is the shift's name and nothing else.
+        //
+        // No DESCRIPTION, and deliberately so. A day's note is free text and
+        // people write things in it that they would not put in a calendar they
+        // are about to e-mail their manager — "off sick, hospital", a court
+        // date, a funeral. The exported file leaves the device by definition,
+        // so the note must not be in it. [Overrides] does not carry notes,
+        // which makes that structural rather than a matter of remembering, and
+        // IcsWriterTest holds it that way.
         out += "SUMMARY:${escape(shift.name)}"
         out += "TRANSP:OPAQUE"
         out += "END:VEVENT"

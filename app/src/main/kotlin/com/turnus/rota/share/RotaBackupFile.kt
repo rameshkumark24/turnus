@@ -106,6 +106,19 @@ object RotaBackupFile {
             File(context.filesDir, UNDO_FILE).writeText(text)
         }
 
+    /**
+     * Removes the undo snapshot.
+     *
+     * Necessary for "delete everything" to mean it. The snapshot is a complete
+     * copy of the rota, notes included, and leaving it behind would turn the
+     * one feature that promises to remove the user's data into the one that
+     * quietly keeps a copy of it.
+     */
+    suspend fun clearUndoSnapshot(context: Context) = withContext(Dispatchers.IO) {
+        File(context.filesDir, UNDO_FILE).delete()
+        Unit
+    }
+
     /** The rota as it was before the last restore, or null if there is none. */
     suspend fun undoSnapshot(context: Context): BackupSnapshot? =
         withContext(Dispatchers.IO) {

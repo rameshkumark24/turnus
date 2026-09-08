@@ -217,6 +217,33 @@ class IcsWriterTest {
         slots = Presets.FOUR_ON_FOUR_OFF.slots,
     )
 
+    /**
+     * The exported file must never carry a day's note.
+     *
+     * A note is free text, and people write things in it they would not send to
+     * their manager — sickness, a hospital appointment, a funeral. The export
+     * exists to be handed to other people, so this is the one place where the
+     * app's most sensitive field and its most widely shared artefact meet.
+     *
+     * Currently structural: [Overrides] carries shift ids, not notes, so there
+     * is nothing to leak. This test exists so that stays true — the obvious
+     * future change is to give Overrides a note for some other feature, and
+     * this fails the moment a DESCRIPTION appears.
+     */
+    @Test
+    fun `the export carries no notes and no description field`() {
+        val ics = writeJanuary()
+        assertTrue(ics.isNotEmpty(), "nothing was written, so this proves nothing")
+        assertFalse(
+            ics.split(CRLF).any { it.startsWith("DESCRIPTION") },
+            "a DESCRIPTION line appeared; a day's note must never leave the device",
+        )
+        assertFalse(
+            ics.split(CRLF).any { it.startsWith("COMMENT") || it.startsWith("X-ALT-DESC") },
+            "a free-text field appeared that could carry a note",
+        )
+    }
+
     private fun shifts() = mapOf(
         ShiftCode.DAY to ShiftDefinition(
             id = ShiftCode.DAY,
