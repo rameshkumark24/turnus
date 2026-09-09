@@ -62,6 +62,7 @@ import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
+import com.turnus.rota.ui.SecureWhileVisible
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -196,6 +197,9 @@ fun MonthScreen(
     }
 
     sheet?.let { open ->
+        // The one screen in the app that puts a note on display, and therefore
+        // the one that must stay out of the recents thumbnail.
+        SecureWhileVisible()
         DaySheet(
             sheet = open,
             styles = state.styles,

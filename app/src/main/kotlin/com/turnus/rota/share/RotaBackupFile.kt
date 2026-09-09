@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -48,6 +49,23 @@ object RotaBackupFile {
     private const val MAX_BYTES = 4 * 1024 * 1024
 
     private const val UNDO_FILE = "rota-before-restore.json"
+
+    /**
+     * How long the reverse gear stays available.
+     *
+     * The snapshot is a second, complete copy of the rota with the notes in it,
+     * and until now it lived until the user wiped the app — which most people
+     * never do. That made it a permanent plaintext copy of data the user may
+     * since have deleted: delete a note about a hospital appointment and it is
+     * gone from the calendar and still sitting in this file.
+     *
+     * Deleting it immediately is the wrong correction, because the whole point
+     * is that restoring the wrong file is a mistake you discover *later* — when
+     * you next look at your calendar and it is not yours. A month covers that
+     * discovery comfortably and still bounds how long the copy exists, which is
+     * the trade the feature actually needs.
+     */
+    private val UNDO_LIFETIME = Duration.ofDays(30)
 
     private const val TAG = "RotaBackupFile"
 
@@ -142,13 +160,52 @@ object RotaBackupFile {
         Unit
     }
 
-    /** The rota as it was before the last restore, or null if there is none. */
+    /**
+     * The rota as it was before the last restore, or null if there is none.
+     *
+     * An expired snapshot is deleted here rather than merely ignored. Returning
+     * null while leaving the file on disk would hide the copy instead of
+     * removing it, which is the opposite of the point.
+     */
     suspend fun undoSnapshot(context: Context): BackupSnapshot? =
         withContext(Dispatchers.IO) {
             val file = File(context.filesDir, UNDO_FILE)
             if (!file.exists()) return@withContext null
+            if (hasExpired(file)) {
+                file.delete()
+                return@withContext null
+            }
             (RotaBackup.decode(file.readText()) as? BackupResult.Success)?.snapshot
         }
+
+    /**
+     * Drops the snapshot once it is past its life, wherever the app happens to
+     * start.
+     *
+     * [undoSnapshot] expires it on read, but only the settings screen reads it —
+     * so someone who restores once and never opens settings again would keep the
+     * copy indefinitely, which is precisely the person this is for. Called at
+     * startup so the file goes whether or not anyone looks for it.
+     */
+    suspend fun expireUndoSnapshot(context: Context) = withContext(Dispatchers.IO) {
+        val file = File(context.filesDir, UNDO_FILE)
+        if (file.exists() && hasExpired(file)) file.delete()
+        Unit
+    }
+
+    /**
+     * Age by the file's own timestamp, and a clock moved backwards does not
+     * extend it: an unreadable or future-dated timestamp counts as expired,
+     * because the failure that keeps the copy is worse than the one that drops
+     * it. The user has lost an undo they had almost certainly stopped needing;
+     * they have not lost their rota, which is in the database either way.
+     */
+    private fun hasExpired(file: File): Boolean {
+        val written = file.lastModified()
+        if (written <= 0L) return true
+        val age = System.currentTimeMillis() - written
+        return age < 0L || age > UNDO_LIFETIME.toMillis()
+    }
 
     /**
      * Recorded in the file so a future release can tell which build wrote it.

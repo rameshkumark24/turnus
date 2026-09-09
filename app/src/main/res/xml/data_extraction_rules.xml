@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What Android may take off this device, for API 31 and above.
+
+  Without this file the default is everything, and everything includes the
+  database and `rota-before-restore.json` — both of which hold day notes. Notes
+  are where people record sickness, hospital appointments and bereavements, and
+  the rule they live under is that they never leave the device except by a route
+  the user chose. Android's automatic backup is not chosen: it is on by default
+  and it is silent, which is exactly the property that disqualifies it.
+
+  So the rota is excluded from both routes and the app's own "Save a backup" —
+  a file, in a folder the user picked — remains the only way it travels. That
+  also makes the sentence on the settings screen true again: a new phone really
+  does start empty.
+
+  Shared preferences stay included on purpose. They hold the advert consent
+  answer and the kill-switch cache, nothing about the user's rota, and carrying
+  a consent decision to a new device saves asking the same question twice.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" />
+        <exclude domain="file" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" />
+        <exclude domain="file" />
+    </device-transfer>
+</data-extraction-rules>

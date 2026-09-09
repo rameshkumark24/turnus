@@ -215,6 +215,21 @@ reliably".
 | Deleting a shift still used by the rota or a changed day | Blank cells nobody can explain | Refused, naming what still uses it and how many days | None |
 | Process death mid-wizard | A hand-built 40-day cycle lost | View-model state does not survive process death. Accepted for v1: the window is small and the loss is recoverable by redoing it | Accepted |
 
+## 12b. What leaves the device without being asked
+
+Added after an adversarial audit. The threat model for this app is not a remote
+attacker — there is no server to attack. It is someone holding an unlocked phone
+that is not theirs, and a note that says "hospital".
+
+| Trigger | Unhandled | Should happen | Fix |
+|---|---|---|---|
+| **Android's automatic backup** copies the app's data to Google Drive and to a new phone | The rota, the changed days and **the notes** go with it. Silent, on by default, and not a choice the user made — while the settings screen says "Turnus keeps your rota on this phone and nowhere else" and the listing says it is not uploaded anywhere | The rota is excluded from both cloud backup and device transfer; shared preferences (advert consent) still travel. The app's own "Save a backup" stays the only copy that leaves, because that one the user placed | **Done** — verified end-to-end on a vivo V2307: backed up through the local transport, `pm clear`, restored, and the app came back at **first run with no rota**. The exclusion is real, not just declared |
+| **`adb backup` on Android 11 and below** | Same data, extracted by anyone with the unlocked phone and a few minutes — no Google account, no network | Covered by the same exclusion, through `backup_rules.xml`, which is the file the older mechanism reads | **Done** — same fix. `minSdk` is 26, so this half of the audience is the reason both rule files exist rather than only the modern one |
+| **The pre-restore undo copy outliving its purpose** | A complete plaintext copy of the rota including notes sat in `filesDir` until the user wiped the app, which most never do — so a note deleted from the calendar was still on disk months later | Bounded to 30 days: long enough to notice a restore was wrong, short enough not to be a permanent second copy. Expired on read *and* at startup, because only the settings screen reads it | **Done** — verified on the vivo both ways: a copy dated 40 days ago is deleted on next launch, a fresh one is kept and the undo still works |
+| **A note on screen in the recents thumbnail** | Whatever is on display is photographed by the task switcher, and the day sheet is the one screen that displays a note | `FLAG_SECURE` while the sheet is open, and only then — a blanket flag would block the screenshot of the month grid that users legitimately take to send to somebody | **Done** — verified on the vivo: `SECURE` present in the window flags with the sheet open, absent when closed, absent on every other screen. Note `adb screencap` still captures it; that is a privileged path and not the threat |
+| Shift name on the lock screen | Readable without unlocking | Accepted. A reminder that hides what shift it is about is not a reminder. It is a shift name, never a note | Accepted |
+| The database is not encrypted | Readable on a rooted or forensically imaged device | Accepted. App-private storage plus the device lock is the boundary; SQLCipher is outside the dependency policy and would not help against the unlocked-phone case, which is the actual threat. The mitigation that matters is keeping the data from leaving at all, above | Accepted |
+
 ## 13. Widget
 
 | Trigger | Unhandled | Should happen | Fix |

@@ -12,6 +12,13 @@ fetch) and **zero** reads of any device identifier. No analytics or
 crash-reporting SDK is present. Everything below comes from the Google Mobile
 Ads SDK.
 
+The rota, the changed days and the notes are **excluded from Android's automatic
+backup and from device-to-device transfer** (`res/xml/data_extraction_rules.xml`
+and `res/xml/backup_rules.xml`). That is not a Data Safety field — Android's
+backup is not collection by this app — but it is worth knowing when answering
+the deletion and retention questions, because it means the only copy that ever
+leaves the device is one the user saved deliberately.
+
 Permissions the ads SDK merges into the release manifest:
 
 - `com.google.android.gms.permission.AD_ID`

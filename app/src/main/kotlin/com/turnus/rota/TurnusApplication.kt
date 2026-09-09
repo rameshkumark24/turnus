@@ -1,8 +1,10 @@
 package com.turnus.rota
 
 import android.app.Application
+import android.util.Log
 import com.turnus.rota.data.RotaData
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.share.RotaBackupFile
 import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.TurnusDatabase
 import com.turnus.rota.notify.NotificationChannels
@@ -57,6 +59,12 @@ class TurnusApplication : Application() {
         // another module but the same process, and both must use one instance.
         RotaData.install(repository)
         applicationScope.launch { repository.seedDefaultsIfEmpty() }
+        // The pre-restore copy holds notes. It has a life, and this is where
+        // it ends for anyone who never opens the settings screen again.
+        applicationScope.launch {
+            runCatching { RotaBackupFile.expireUndoSnapshot(this@TurnusApplication) }
+                .onFailure { Log.w("TurnusApplication", "could not expire the undo copy", it) }
+        }
 
         // The channel must exist before the user goes looking for it in system
         // settings, not only after a reminder has already fired once.

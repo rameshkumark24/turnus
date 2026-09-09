@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The same exclusions for API 30 and below, which read this file instead of
+  `data_extraction_rules.xml`. Both are needed: `minSdk` is 26, so a large part
+  of the audience is on the older mechanism — and the older mechanism is the one
+  `adb backup` uses, which is the extraction path that needs no Google account
+  and no network, only a few minutes with an unlocked phone.
+
+  Excludes only. Anything not named here is still included, which keeps the
+  advert consent answer travelling with the user.
+-->
+<full-backup-content>
+    <exclude domain="database" />
+    <exclude domain="file" />
+</full-backup-content>

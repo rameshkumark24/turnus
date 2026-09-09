@@ -33,16 +33,27 @@ All of this stays in the app's private storage and is never transmitted:
 - Individual days you have changed, and any notes attached to them
 - Your reminder preferences
 
-Uninstalling the app deletes all of it. If you have Android's automatic backup
-enabled, Android may include this data in your own Google Drive backup — that is
-a function of your device and your Google account, not something Turnus sends
-anywhere.
+Uninstalling the app deletes all of it.
+
+**Your rota is excluded from Android's automatic backup.** Android offers to
+copy an app's data to your Google Drive and to carry it to a new phone, and
+Turnus opts its rota, your changed days and your notes out of both. That is
+deliberate: a backup you did not ask for is not a choice, and notes are the most
+private thing in this app. The only copy that travels is the one you make
+yourself with "Save a backup", to a folder you pick. It does mean a new phone
+starts empty unless you saved that file.
 
 ## What we do not do
 
-Turnus contains no analytics and no crash-reporting SDK. It does not read your
-advertising ID, your device ID, your contacts, your location, your accounts, or
-your files. It has no code that uploads your rota anywhere.
+Turnus contains no analytics and no crash-reporting SDK. Turnus's own code does
+not read your advertising ID, your device ID, your contacts, your location, your
+accounts, or your files, and it has no code that uploads your rota anywhere.
+
+The Google Mobile Ads SDK is part of the app and **does** read your advertising
+ID and your approximate location from your IP address, as set out in the section
+below. We draw that distinction because it is a real one — we cannot see any of
+it — but for Google Play's Data Safety form the answer is that this app collects
+it, and that is how we have declared it.
 
 ## Data collected by Google AdMob
 

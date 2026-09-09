@@ -43,7 +43,7 @@ Three claims, in the order they matter: it works without a signal, it tells you
 before a shift, and it costs nothing. The last is the differentiator and takes
 the emphatic position.
 
-## 3. Full description — 3,200 / 4,000 characters
+## 3. Full description — 3,278 / 4,000 characters
 
 ```
 Set your rotation once. Turnus fills in your calendar for years ahead, reminds
@@ -84,8 +84,9 @@ Swapped a shift, picked up overtime, called in sick, booked a holiday — change
 the day and the pattern carries on around it. Add a note to any day.
 
 IT STAYS ON YOUR PHONE
-No account. No sign-up. No servers. Your rota is not uploaded anywhere, because
-there is nowhere for it to go. Notes are the most private thing in the app and
+No account. No sign-up. No servers. Your rota is not uploaded anywhere, and it
+is left out of Android's automatic backup too, so it does not travel to your
+Google Drive without you asking. Notes are the most private thing in the app and
 they never leave the device — not in the calendar export, not in a share code.
 There is no analytics or crash-reporting SDK in this app at all.
 
@@ -192,5 +193,5 @@ and each would be a lie or a trap.
 
 ---
 
-*Counts verified by `docs/check-listing.sh` — 27/30, 73/80, 3,200/4,000. Two of
+*Counts verified by `docs/check-listing.sh` — 27/30, 73/80, 3,278/4,000. Two of
 the three numbers first written here were wrong, which is why the script exists.*
