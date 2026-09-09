@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -212,6 +213,23 @@ fun MonthScreen(
     }
 }
 
+/**
+ * The month title and the controls that move it.
+ *
+ * Two layouts, chosen by the font scale the user set. Side by side is right at
+ * a normal size and wrong at an accessibility one: the title shares the row
+ * with five controls whose glyphs grow with the font, and past about 1.15x it
+ * is left a column narrower than the word it has to hold. Measured on a vivo
+ * V2307 at 2x, the header rendered "Sept / emb / er / 202 / 6" down five lines
+ * and pushed the reminder card off the screen; constraining it to one line
+ * traded that for "Se...", which is worse — a calendar that will not tell you
+ * which month you are looking at.
+ *
+ * So above that scale the title takes a row of its own and the controls sit
+ * under it. It costs a line of height to someone who has already told the
+ * system they want larger text, which is a trade they have effectively already
+ * asked for.
+ */
 @Composable
 private fun MonthHeader(
     title: String,
@@ -221,23 +239,45 @@ private fun MonthHeader(
     onOpenSettings: () -> Unit,
     onOpenYear: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
+    val stacked = LocalDensity.current.fontScale > 1.15f
+
+    @Composable
+    fun Title(modifier: Modifier = Modifier) = Text(
+        text = title,
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.onBackground,
+        // The stacked layout gives this the full width, so one line always
+        // holds. The guard stays for whatever locale has a longer month name
+        // than anything tested here.
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+
+    @Composable
+    fun Controls() {
         TextButton(onClick = onToday) { Text("Today") }
         StepButton(label = "‹", description = "Previous month", onClick = onPrevious)
         StepButton(label = "›", description = "Next month", onClick = onNext)
         StepButton(label = "▦", description = "Year view", onClick = onOpenYear)
         StepButton(label = "⋮", description = "Settings", onClick = onOpenSettings)
+    }
+
+    if (stacked) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+            Title(Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) { Controls() }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Title(Modifier.weight(1f))
+            Controls()
+        }
     }
 }
 
@@ -776,7 +816,22 @@ private fun days(count: Int): String = if (count == 1) "1 day" else "$count days
 
 private const val COLUMNS = 7
 
-private val MONTH_TITLE: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL yyyy")
+/**
+ * The month abbreviated, because the full name has never fitted.
+ *
+ * "LLLL yyyy" was the obvious choice and it was wrong on this screen. The title
+ * shares its row with five controls, and measured on a vivo V2307 at 1080px
+ * there is not room for "September 2026" beside them at *any* font scale: it
+ * wrapped to two lines at the default, and at a 2x accessibility scale it broke
+ * mid-word into "Sept / emb / er / 202 / 6" and pushed the reminder card off the
+ * screen. Constraining it to one line only traded that for "Septemb...", which
+ * is worse again - a calendar that will not say which month it is showing.
+ *
+ * "Sep 2026" fits at every scale, reads unambiguously, and costs a word nobody
+ * was reading. The vertical space it saves goes to the grid, which is what
+ * people opened the app for.
+ */
+private val MONTH_TITLE: DateTimeFormatter = DateTimeFormatter.ofPattern("LLL yyyy")
 private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE")
 private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 private val CELL_ANNOUNCE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM")
