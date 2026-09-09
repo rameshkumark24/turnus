@@ -152,11 +152,41 @@ then. Every caption below is an overlay, not part of the app.
 | 7 | Home-screen widget beside the app icon | **Today's shift, without opening anything** | The most-used surface |
 | 8 | Hours card, "Rostered — not a record of what you worked" | **Hours, honestly counted** | Sets the expectation that stops a bad review |
 
-**Producing them.** Set up a 4-on-4-off rota anchored so the visible month shows
-two full runs; add one changed day and one note for shot 6. Capture on a device
-with a clean status bar (no personal notification icons — silence notifications
-first). Crop to a ratio Play accepts and confirm the current requirement in Play
-Console at upload rather than trusting a number written down here.
+### What is captured and what is not
+
+Six of the eight are in `docs/screenshots/`, taken on a vivo V2307, cropped to
+**1080 x 1920** — the device is 1080 x 2400, which is 2.22:1 and more elongated
+than Play accepts, so a 16:9 window is cut from the content rather than the image
+being squashed. Confirm the current requirement in Console at upload rather than
+trusting a number written here.
+
+| File | Shot |
+|---|---|
+| `01-calendar.png` | the month grid, with the reminder offer |
+| `03-sharecode.png` | a pasted code previewing someone else's rota |
+| `04-year.png` | the year, with working days, hours and longest break |
+| `05-nudge.png` | out by a day, and the two buttons that fix it |
+| `06-day.png` | changing a day, with a note |
+| `08-hours.png` | the hours card and its "rostered" caveat |
+
+**Still to capture: 02 (a reminder on the lock screen)** — it needs an alarm to
+actually fire, so it is a wait rather than a tap — **and 07 (the widget)**, which
+has to be placed on a home screen by hand.
+
+**Three things that had to be worked around, worth knowing before redoing these:**
+
+- **The status bar is cropped off, not cleaned up.** SystemUI demo mode, which
+  normally freezes the clock and hides notification icons, is stripped out of
+  this vendor's ROM, so the choice was a real clock and a carrier name in every
+  shot or no status bar at all.
+- **Ads were turned off at the kill switch during capture**, because a debug
+  build renders a "Test Ad" placeholder across the bottom and a release build
+  would put a stranger's advert in the listing. Turned back on immediately.
+- **The day sheet cannot be screenshotted at all** in a normal build: it carries
+  `FLAG_SECURE`, which blocks `adb screencap` as well as the recents thumbnail.
+  Shot 06 was taken with the flag temporarily lifted and the flag put straight
+  back. Anyone redoing this shot has to do the same, and should check
+  `git diff` afterwards.
 
 **Do not** show a shift named after a real employer, and do not show a note that
 reads like a real person's medical appointment. The note in shot 6 should be
