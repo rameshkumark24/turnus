@@ -134,6 +134,13 @@ object ShareLink {
         val codes = if (parts[1].isEmpty()) emptyList() else parts[1].split(CODE_SEPARATOR)
         val encodedSlots = parts[2]
         if (encodedSlots.isEmpty()) return ShareLinkResult.Malformed
+        // The ceiling the setup builder enforces, applied to a stranger's code
+        // as well. Reported distinctly rather than as [Malformed]: this *is* a
+        // Turnus code, and telling someone it is not would send them back to
+        // the person who sent it to argue about the wrong thing.
+        if (encodedSlots.length > Pattern.MAX_CYCLE_DAYS) {
+            return ShareLinkResult.CycleTooLong(encodedSlots.length, Pattern.MAX_CYCLE_DAYS)
+        }
 
         val slots = encodedSlots.map { ch ->
             if (ch == OFF) {
@@ -233,4 +240,13 @@ sealed interface ShareLinkResult {
 
     /** A valid code from a newer app. Prompt to update rather than guessing. */
     data class UnsupportedVersion(val version: String) : ShareLinkResult
+
+    /**
+     * A readable code describing a cycle longer than the app will take.
+     *
+     * Its own result, not [Malformed], because the difference is the difference
+     * between "your workmate sent you something broken" and "this app does not
+     * go that far" — and only one of those is true.
+     */
+    data class CycleTooLong(val days: Int, val maximum: Int) : ShareLinkResult
 }

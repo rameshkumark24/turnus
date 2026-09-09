@@ -62,7 +62,6 @@ import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
-import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -79,11 +78,6 @@ fun MonthScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val showReminderPrompt by viewModel.showReminderPrompt.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    // Midnight. Without this the grid goes on ringing yesterday for as long as
-    // the calendar is left on screen, which is precisely the wrong answer to
-    // give someone on nights at 00:05.
-    OnDateChange(viewModel::refreshToday)
 
     // The one ask Android allows, spent only on an explicit tap. Refusing is a
     // complete answer: the card is retired either way, because asking twice is
@@ -552,6 +546,25 @@ private fun NextShiftCard(
  * It follows the month on the title, not the calendar month, so paging forward
  * answers the question for the month being looked at.
  */
+/**
+ * "THIS MONTH", or the month's own name.
+ *
+ * A plain function so the rollover case can be tested. It cannot be reached on
+ * a device without waiting for a month boundary, and it was the one part of the
+ * screen that used to get midnight wrong on its own: the comparison read the
+ * clock inside a `remember` that nothing invalidated, so a grid which had
+ * correctly moved its ring to 1 October went on calling September "this month".
+ * Comparing against [today] instead means it moves with everything else.
+ */
+internal fun hoursCaption(yearMonth: YearMonth, today: DayNumber, locale: Locale): String =
+    if (yearMonth == YearMonth.from(today.toLocalDate())) {
+        "THIS MONTH"
+    } else {
+        yearMonth.month
+            .getDisplayName(JavaTextStyle.FULL_STANDALONE, locale)
+            .uppercase(locale)
+    }
+
 @Composable
 private fun HoursCard(state: MonthUiState, modifier: Modifier = Modifier) {
     val hours = state.hours
@@ -565,13 +578,7 @@ private fun HoursCard(state: MonthUiState, modifier: Modifier = Modifier) {
     // a grid that had correctly moved its ring to 1 October went on calling
     // September "THIS MONTH".
     val label = remember(state.yearMonth, state.locale, state.today) {
-        if (state.yearMonth == YearMonth.from(state.today.toLocalDate())) {
-            "THIS MONTH"
-        } else {
-            state.yearMonth.month
-                .getDisplayName(JavaTextStyle.FULL_STANDALONE, state.locale)
-                .uppercase(state.locale)
-        }
+        hoursCaption(state.yearMonth, state.today, state.locale)
     }
 
     Column(

@@ -3,6 +3,7 @@ package com.turnus.rota
 import android.app.Application
 import com.turnus.rota.data.RotaData
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.TurnusDatabase
 import com.turnus.rota.notify.NotificationChannels
 import com.turnus.rota.notify.ReminderTopUpWorker
@@ -36,6 +37,14 @@ class TurnusApplication : Application() {
     }
 
     val repository: RotaRepository by lazy { RotaRepository(database) }
+
+    /**
+     * Which day it is, for every screen at once.
+     *
+     * Application-scoped rather than per-ViewModel so two screens alive
+     * together cannot disagree about the date — see [TodayClock].
+     */
+    val clock: TodayClock = TodayClock()
 
     override fun onCreate() {
         super.onCreate()

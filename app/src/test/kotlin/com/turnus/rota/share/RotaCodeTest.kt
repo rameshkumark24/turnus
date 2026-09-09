@@ -125,6 +125,47 @@ class RotaCodeTest {
         assertRota(RotaCode.read("v9.YW55dGhpbmc\n\n${token()}"))
     }
 
+    /**
+     * An over-long cycle survives the candidate ladder as itself.
+     *
+     * The ladder used to keep only a version complaint and throw every other
+     * non-success away as [ShareLinkResult.Malformed], which would have turned
+     * "this rota is too long" back into "this is not a rota code".
+     */
+    @Test
+    fun `a cycle too long to use is reported as such, not as broken`() {
+        val long = Pattern(
+            id = "p",
+            name = "long",
+            anchor = DayNumber.of(2026, 9, 4),
+            slots = List(Pattern.MAX_CYCLE_DAYS + 5) { "a" },
+        )
+        val token = ShareLink.encode(
+            long,
+            mapOf("a" to ShiftDefinition(id = "a", code = "a", name = "A")),
+        )
+
+        val result = RotaCode.read("here you go\n\n$token\n\npaste that in")
+        val tooLong = assertIs<ShareLinkResult.CycleTooLong>(result)
+        assertEquals(Pattern.MAX_CYCLE_DAYS + 5, tooLong.days)
+    }
+
+    /** A usable rota anywhere in the paste still wins over one that is not. */
+    @Test
+    fun `a usable rota beats an over-long one earlier in the message`() {
+        val long = Pattern(
+            id = "p",
+            name = "long",
+            anchor = DayNumber.of(2026, 9, 4),
+            slots = List(Pattern.MAX_CYCLE_DAYS + 5) { "a" },
+        )
+        val longToken = ShareLink.encode(
+            long,
+            mapOf("a" to ShiftDefinition(id = "a", code = "a", name = "A")),
+        )
+        assertRota(RotaCode.read("$longToken\n\n${token()}"))
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private fun assertRota(result: ShareLinkResult) {

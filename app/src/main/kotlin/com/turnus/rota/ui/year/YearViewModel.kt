@@ -3,6 +3,7 @@ package com.turnus.rota.ui.year
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Hours
@@ -81,10 +82,11 @@ data class YearUiState(
 
 class YearViewModel(
     private val repository: RotaRepository,
+    clock: TodayClock,
 ) : ViewModel() {
 
-    /** Observable for the same reason the month grid's is — see `OnDateChange`. */
-    private val today = MutableStateFlow(DayNumber.today())
+    // One shared source — see [TodayClock].
+    private val today = clock.today
 
     // Derived from `today` rather than reading the clock again: two reads a
     // microsecond apart can land either side of new year.
@@ -93,11 +95,6 @@ class YearViewModel(
 
     fun setLocale(value: Locale) {
         locale.value = value
-    }
-
-    /** Called from the screen when the system says the date moved. */
-    fun refreshToday() {
-        today.value = DayNumber.today()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -340,6 +340,46 @@ class ShareLinkTest {
         }
     }
 
+    // --------------------------------------------------- a cycle we will not take
+
+    /**
+     * The ceiling the setup builder enforces, applied to a stranger's code too.
+     *
+     * It was enforced on one side only: a hand-built code could store a cycle
+     * of any length at all, because nothing between the decoder and the write
+     * looked. Nothing blew up — every consumer resolves a day at a time rather
+     * than walking the cycle — but "the builder refuses it and the importer
+     * does not" is a rule that only half exists.
+     */
+    @Test
+    fun `refuses a cycle longer than the app builds`() {
+        val tooLong = tokenWithCycleOf(Pattern.MAX_CYCLE_DAYS + 1)
+        val result = assertIs<ShareLinkResult.CycleTooLong>(ShareLink.decode(tooLong))
+        assertEquals(Pattern.MAX_CYCLE_DAYS + 1, result.days)
+        assertEquals(Pattern.MAX_CYCLE_DAYS, result.maximum)
+
+        val absurd = ShareLink.decode(tokenWithCycleOf(10_000))
+        assertEquals(10_000, assertIs<ShareLinkResult.CycleTooLong>(absurd).days)
+    }
+
+    /** And takes one exactly at the limit, which is a rota, not an attack. */
+    @Test
+    fun `accepts a cycle exactly at the limit`() {
+        val ok = ShareLink.decode(tokenWithCycleOf(Pattern.MAX_CYCLE_DAYS))
+        assertEquals(Pattern.MAX_CYCLE_DAYS, assertIs<ShareLinkResult.Success>(ok).codes.size)
+    }
+
+    /**
+     * Reported as its own thing, never as [ShareLinkResult.Malformed]. Telling
+     * someone a readable code is "not a Turnus code" sends them back to the
+     * workmate who sent it to argue about the wrong problem.
+     */
+    @Test
+    fun `an over-long cycle is not reported as a broken code`() {
+        val result = ShareLink.decode(tokenWithCycleOf(200))
+        assertTrue(result !is ShareLinkResult.Malformed, "got $result")
+    }
+
     /** But a real version from the future still says so. */
     @Test
     fun `a genuine newer version is still reported as one`() {
@@ -364,6 +404,17 @@ class ShareLinkTest {
         pattern.slots.filterNotNull().distinct().associateWith { id ->
             ShiftDefinition(id = id, code = id, name = id)
         }
+
+    /** A valid v1 token whose cycle is [days] long — every day a working day. */
+    private fun tokenWithCycleOf(days: Int): String {
+        val pattern = Pattern(
+            id = "p",
+            name = "long",
+            anchor = DayNumber.of(2026, 9, 4),
+            slots = List(days) { "a" },
+        )
+        return ShareLink.encode(pattern, mapOf("a" to ShiftDefinition(id = "a", code = "a", name = "A")))
+    }
 
     private fun fourOnFourOff() = Pattern(
         id = "p1",

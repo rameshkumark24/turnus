@@ -88,6 +88,14 @@
                 <!-- Sent by several manufacturers in place of the standard action. -->
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <!--
+                  A reminder is converted from a wall-clock time to an instant
+                  once, when it is scheduled. Moving the clock or the zone
+                  leaves a window of alarms that no longer mean the time they
+                  were set for, and Android reschedules none of them.
+                -->
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
             </intent-filter>
         </receiver>
     </application>

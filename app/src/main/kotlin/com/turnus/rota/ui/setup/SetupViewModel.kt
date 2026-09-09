@@ -360,6 +360,7 @@ class SetupViewModel(
     fun dismissError() = _state.update { it.copy(error = null) }
 
     private companion object {
-        const val MAX_CYCLE = 40
+        /** One number, shared with the share-code reader, so they cannot drift. */
+        const val MAX_CYCLE = Pattern.MAX_CYCLE_DAYS
     }
 }

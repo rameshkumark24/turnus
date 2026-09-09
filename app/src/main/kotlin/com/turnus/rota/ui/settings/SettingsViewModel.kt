@@ -10,6 +10,7 @@ import com.turnus.rota.data.BackupResult
 import com.turnus.rota.data.BackupSnapshot
 import com.turnus.rota.data.BackupSummary
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Pattern
@@ -110,10 +111,11 @@ data class PendingImport(
 
 class SettingsViewModel(
     private val repository: RotaRepository,
+    clock: TodayClock,
 ) : ViewModel() {
 
     /**
-     * Observable, and this one is not merely a caption.
+     * The shared day, and this one is not merely a caption.
      *
      * It used to be read once when the ViewModel was built, on the grounds that
      * a settings screen left open across midnight would show "yesterday's shift
@@ -124,12 +126,7 @@ class SettingsViewModel(
      * it invites them to shift a correct rota by a day to fix a misalignment
      * that is not real — which is the exact complaint this app exists to answer.
      */
-    private val today = MutableStateFlow(DayNumber.today())
-
-    /** Called from the screen when the system says the date moved. */
-    fun refreshToday() {
-        today.value = DayNumber.today()
-    }
+    private val today = clock.today
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<SettingsUiState> = today.flatMapLatest { currentDay ->
@@ -291,6 +288,11 @@ class SettingsViewModel(
 
                 is ShareLinkResult.UnsupportedVersion ->
                     _error.value = "That code was made by a newer version of Turnus. Update the app first."
+
+                // Names the real limit rather than calling their code broken.
+                is ShareLinkResult.CycleTooLong ->
+                    _error.value = "That rota repeats every ${result.days} days. " +
+                        "Turnus handles cycles up to ${result.maximum} days."
             }
         }
     }

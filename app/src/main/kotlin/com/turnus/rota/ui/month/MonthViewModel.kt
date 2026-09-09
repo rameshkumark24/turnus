@@ -3,6 +3,7 @@ package com.turnus.rota.ui.month
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Hours
@@ -125,25 +126,12 @@ internal fun localeFirstDayOfWeek(locale: Locale): DayOfWeek =
 
 class MonthViewModel(
     private val repository: RotaRepository,
+    clock: TodayClock,
 ) : ViewModel() {
 
-    /**
-     * Which day is today, as a value that can change while the screen is open.
-     *
-     * It used to be read inline when the state was assembled, which refreshed it
-     * whenever the rota changed, the month was paged, or the screen came back to
-     * the foreground — and never at midnight, because nothing about midnight
-     * touches the database. A calendar left on screen went on ringing yesterday.
-     *
-     * A `StateFlow` also conflates an unchanged day, so the clock nudges that
-     * arrive alongside a real date change cost nothing.
-     */
-    private val today = MutableStateFlow(DayNumber.today())
-
-    /** Called from the screen when the system says the date moved. */
-    fun refreshToday() {
-        today.value = DayNumber.today()
-    }
+    // One shared source, not a copy. See [TodayClock] for why the day is not
+    // read here: two screens holding their own answer could disagree.
+    private val today = clock.today
 
     // Derived from `today` rather than reading the clock again: two reads a
     // microsecond apart can land either side of the first of the month.

@@ -90,15 +90,19 @@ object RotaCode {
             yieldAll(trimmed.split(WHITESPACE).filter { it.contains('.') })
         }
 
-        var fromTheFuture: ShareLinkResult.UnsupportedVersion? = null
+        // A candidate that decoded but cannot be used is worth keeping: it is
+        // the difference between telling someone their code is broken and
+        // telling them what is actually wrong with it. Only [Malformed] — which
+        // means "this was not a code at all" — is discarded on the way past.
+        var problem: ShareLinkResult? = null
         for (candidate in candidates) {
             when (val result = ShareLink.decode(candidate)) {
                 is ShareLinkResult.Success -> return result
-                is ShareLinkResult.UnsupportedVersion -> fromTheFuture = fromTheFuture ?: result
                 ShareLinkResult.Malformed -> Unit
+                else -> problem = problem ?: result
             }
         }
-        return fromTheFuture ?: ShareLinkResult.Malformed
+        return problem ?: ShareLinkResult.Malformed
     }
 
     /** A blank line, however the sender's platform spells its line endings. */

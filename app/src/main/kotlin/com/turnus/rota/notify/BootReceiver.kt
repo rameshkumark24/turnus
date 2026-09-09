@@ -22,6 +22,24 @@ import kotlinx.coroutines.launch
  * arrives first on devices with direct boot, and `MY_PACKAGE_REPLACED` fires
  * after an app update, which also clears nothing but is the other moment the
  * window can be silently stale.
+ *
+ * ### The clock moving is the third moment, and the least obvious
+ *
+ * A reminder is planned as a wall-clock time — "06:00, the day of that shift" —
+ * and then converted once, at scheduling time, into an instant. Change the
+ * timezone and that instant no longer means 06:00: someone who flies from
+ * London to Madrid keeps a window of alarms that all fire an hour early, and
+ * nothing in Android reschedules them. The app already rebuilds the window
+ * whenever the user leaves a session, so the gap is exactly the case where they
+ * have not opened it since — which is every case that matters, because the
+ * person this fails is asleep in a hotel relying on it.
+ *
+ * `TIMEZONE_CHANGED` is on Android's implicit-broadcast exception list, so a
+ * manifest receiver still hears it. `TIME_SET` is **not** on that list, and is
+ * declared anyway rather than left out: it costs one line, it is harmless if it
+ * never arrives, and the app is running for some of the cases where it does.
+ * Which of the two actually reaches this receiver is recorded in the plan, not
+ * guessed at here.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -55,6 +73,9 @@ class BootReceiver : BroadcastReceiver() {
             // Sent by several manufacturers instead of the standard action.
             "android.intent.action.QUICKBOOT_POWERON",
             "com.htc.intent.action.QUICKBOOT_POWERON",
+            // The clock moved under a window of already-converted instants.
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
         )
     }
 }

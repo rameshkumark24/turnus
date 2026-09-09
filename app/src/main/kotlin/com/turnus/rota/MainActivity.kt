@@ -28,8 +28,10 @@ import com.turnus.rota.ads.AdConfig
 import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.RotaRepository
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.RootState
 import com.turnus.rota.ui.RootViewModel
+import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.ui.month.MonthScreen
 import com.turnus.rota.ui.month.MonthViewModel
 import com.turnus.rota.ui.setup.SetupScreen
@@ -70,7 +72,9 @@ class MainActivity : ComponentActivity() {
         // calendar from wherever they had since navigated.
         if (savedInstanceState == null) consume(intent)
 
-        val repository = (application as TurnusApplication).repository
+        val application = application as TurnusApplication
+        val repository = application.repository
+        val clock = application.clock
 
         setContent {
             TurnusTheme {
@@ -80,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     TurnusApp(
                         repository = repository,
+                        clock = clock,
                         onRotaChanged = ::syncReminders,
                         onCalendarShown = ::startAds,
                         showDay = showDay,
@@ -183,6 +188,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun TurnusApp(
     repository: RotaRepository,
+    clock: TodayClock,
     onRotaChanged: () -> Unit,
     onCalendarShown: () -> Unit,
     showDay: ShowDay?,
@@ -199,7 +205,7 @@ private fun TurnusApp(
     // another RootViewModel collecting the pattern table forever — and would
     // restart the setup wizard from the top, throwing away a built cycle.
     val rootViewModel: RootViewModel = viewModel(
-        factory = remember(repository) { turnusViewModelFactory(repository) },
+        factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
     )
     val state by rootViewModel.state.collectAsStateWithLifecycle()
 
@@ -210,7 +216,7 @@ private fun TurnusApp(
 
         RootState.NeedsSetup -> {
             val setupViewModel: SetupViewModel = viewModel(
-                factory = remember(repository) { turnusViewModelFactory(repository) },
+                factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
             )
             SetupScreen(setupViewModel, onComplete = { /* state flips on save */ })
         }
@@ -226,8 +232,13 @@ private fun TurnusApp(
             // to open. Obtained from the store either way, so this is the same
             // instance the month screen was already using.
             val monthViewModel: MonthViewModel = viewModel(
-                factory = remember(repository) { turnusViewModelFactory(repository) },
+                factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
             )
+
+            // One receiver for the whole app, not one per screen. The day is
+            // held once now, so a screen that was away while it changed comes
+            // back to the right answer rather than to its own stale copy.
+            OnDateChange(clock::refresh)
 
             // A notification tap lands on the calendar, on the month holding
             // the shift it was about — both halves matter. Sending the user to
@@ -250,7 +261,7 @@ private fun TurnusApp(
 
                 Destination.Year -> {
                     val yearViewModel: YearViewModel = viewModel(
-                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                        factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
                     )
                     BackHandler { destination = Destination.Month }
                     YearScreen(
@@ -265,7 +276,7 @@ private fun TurnusApp(
 
                 Destination.Shifts -> {
                     val shiftViewModel: ShiftEditorViewModel = viewModel(
-                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                        factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
                     )
                     BackHandler { destination = Destination.Settings }
                     ShiftEditorScreen(
@@ -281,7 +292,7 @@ private fun TurnusApp(
                     // Rebuilding a second, subtly different rota editor is how
                     // the two drift apart until one of them has the anchor bug.
                     val setupViewModel: SetupViewModel = viewModel(
-                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                        factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
                     )
                     // Idempotent: this runs again on every rotation and font
                     // change, and priming twice would discard a built cycle.
@@ -299,7 +310,7 @@ private fun TurnusApp(
 
                 Destination.Settings -> {
                     val settingsViewModel: SettingsViewModel = viewModel(
-                        factory = remember(repository) { turnusViewModelFactory(repository) },
+                        factory = remember(repository, clock) { turnusViewModelFactory(repository, clock) },
                     )
                     BackHandler { destination = Destination.Month }
                     SettingsScreen(
@@ -338,12 +349,15 @@ private enum class Destination { Month, Year, Settings, Shifts, Pattern }
  * A DI framework would be a dependency, a compile step and a layer of
  * indirection to build a graph this small.
  */
-private fun turnusViewModelFactory(repository: RotaRepository): ViewModelProvider.Factory =
+private fun turnusViewModelFactory(
+    repository: RotaRepository,
+    clock: TodayClock,
+): ViewModelProvider.Factory =
     viewModelFactory {
         initializer { RootViewModel(repository) }
         initializer { SetupViewModel(repository) }
-        initializer { MonthViewModel(repository) }
-        initializer { SettingsViewModel(repository) }
-        initializer { YearViewModel(repository) }
+        initializer { MonthViewModel(repository, clock) }
+        initializer { SettingsViewModel(repository, clock) }
+        initializer { YearViewModel(repository, clock) }
         initializer { ShiftEditorViewModel(repository) }
     }

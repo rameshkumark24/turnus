@@ -288,7 +288,7 @@ That is the phase working as intended rather than against it — the code exists
 because a measurement contradicted a written claim.
 
 ## Phase 15 — The store listing
-STATUS: NOT STARTED
+STATUS: DONE
 GOAL: A listing that says the true thing that no competitor can copy.
 BUILD: Title, short and long description, screenshot sequence, feature graphic.
 Built on **"nothing is locked"** with **free reminders** as the proof point and
@@ -301,7 +301,20 @@ read it.
 DONE WHEN: Every asset Play requires is drafted and sitting in `docs/`.
 DEPENDS ON: 12
 PLAN MODE: no
-NEEDS FROM YOU: whether to target a profession by name, per the research.
+DECIDED: **Professions are named in the long description only.** The title and
+short description stay pattern-led so the listing speaks to every shift worker;
+the long description carries the job titles, because Play indexes it and people
+search their job rather than their rotation. Naming one profession in the title
+was rejected — there is no profession-specific feature to make it credible.
+That closes `PRD.md` §10 Q2 *for the listing*, not for the product.
+DELIVERED: `docs/STORE-LISTING.md` — name, short and full description, feature
+graphic brief, an eight-shot screenshot sequence with the reason each shot
+exists, and the rest of the Play form. `docs/check-listing.sh` checks the copy
+against Play's field limits; two of the three counts written by hand were wrong,
+which is why it exists.
+STILL YOURS: the privacy policy is written but **not hosted**, and that blocks
+release. Contact email and EU trader status are undecided. The icon has had no
+polish pass and is the only asset judged before anything here is read.
 
 ## Phase 16 — Release candidate
 STATUS: NOT STARTED
@@ -355,20 +368,20 @@ cutting it saves an hour and keeps two unknowns in a shipping product.
 
 *Update this section at the end of every phase.*
 
-**Last updated:** after Phase 14, before Phase 15.
+**Last updated:** after Phase 15, before Phase 16.
 
 ## What is built
 
 The app is **feature-complete for v1** and verified on a physical device (vivo
 V2307) and an emulator.
 
-- **`:engine`** — 135 tests, pure JVM, property-based over thousands of
+- **`:engine`** — 138 tests, pure JVM, property-based over thousands of
   generated cases per run.
 - **`:data`** — 39 instrumented tests against real SQLite, including a
   migration test that proves an upgrade preserves existing rows.
-- **`:app`** — 11 JVM tests over what a messaging app does to a pasted share
-  code. New source set in Phase 13; `RotaCode.read` is pure string handling, so
-  these run in milliseconds rather than on a device.
+- **`:app`** — 22 JVM tests: what a messaging app does to a pasted share code,
+  the shared day-of-the-month clock, and the hours caption at a month rollover.
+  The last two exist only because Phase 15 made the clock injectable.
 - **`:app`** — setup wizard, month grid, day editor, next-shift card, year view,
   reminders, shift editor, rota editor, hours, backup and restore, share and
   import by code, calendar export, delete-everything, adverts and consent.
@@ -385,20 +398,42 @@ V2307) and an emulator.
 
 ## Known-wrong, deliberately not yet fixed
 
-Nothing from Phases 13 or 14 is left open. Two smaller things are known, written
-down in `EDGE-CASES.md`, and deliberately scheduled rather than forgotten:
+Both items that stood here were fixed in Phase 15 and are recorded in
+`EDGE-CASES.md` with what was measured. What is left is smaller and honest:
 
-- **Reminders are not rescheduled when the timezone changes.** Phase 14 fixed the
-  visible half of this — the grids now correct themselves — but an alarm set from
-  a wall-clock time still fires on the old offset after a flight. Ranking #7, v1.1.
-- **An imported share code has no cycle-length ceiling**, where the setup builder
-  enforces forty days. Confirmed by reading in Phase 14; harm is low because
-  every consumer resolves per day rather than walking the cycle. v1.1.
+- **`ACTION_DATE_CHANGED` has never been delivered in any test.** Everything the
+  app does in response to it is measured, through the timezone and clock actions
+  that share the same handler; the midnight *trigger* itself rests on Android
+  broadcasting it, which is documented rather than observed here. Shell cannot
+  send a protected broadcast and neither device available has root. One look at a
+  real midnight would close it.
+- **`TIME_SET` is declared but may never arrive.** It is not on Android's
+  implicit-broadcast exception list, unlike `TIMEZONE_CHANGED`. Declared because
+  it costs a line and is harmless if unused. The zone case — the one that happens
+  to real people — is measured.
+- **The month-rollover caption is covered by a test, not by a device run.** A
+  timezone shift moves the date by a day and cannot reach a month boundary.
 
 ## Blocked on you, not on code
 
 AdMob IDs · an upload keystore · hosting the privacy policy · Play production
 access · the decision in Phase 15 about naming a profession.
+
+## Carried forward from Phase 15
+
+- **The clock is one object now, and that is why there are tests.** The previous
+  accept — "no automated test, because injecting a clock into two ViewModels is
+  larger than the fix" — was a cost manufactured by holding the date per
+  ViewModel. `TodayClock` takes its reader as a parameter, and nine tests exist
+  that could not have been written before.
+- **Two of three character counts written by hand into the listing were wrong.**
+  `docs/check-listing.sh` now checks them. Worth remembering the next time a
+  number is typed into a document rather than measured.
+- **`uiautomator dump` does not capture snackbars.** Two error messages this
+  session looked absent and were on screen the whole time. Screenshot instead.
+- **A snapshot of one screen is not a snapshot of the app.** The receiver-scope
+  check in Phase 14 exercised navigation and not backgrounding, and missed that
+  the receiver ran the whole time the app was away. Ask what the *other* axis is.
 
 ## Carried forward from Phase 14
 
@@ -461,8 +496,12 @@ access · the decision in Phase 15 about naming a profession.
 
 ## Next
 
-**Phase 15 — The store listing.** Title, short and long description, screenshot
-sequence, feature graphic, all drafted into `docs/`. It is writing rather than
-code, and it **needs one decision from you**: whether to target a profession by
-name. Still outstanding from Phase 13: one look at the *"could not be opened"*
-message against a real undownloaded cloud file.
+**Phase 16 — Release candidate.** Mostly yours rather than mine: real AdMob IDs,
+an upload keystore, the privacy policy hosted, the Data Safety form filled from
+`docs/DATA_SAFETY.md`, trader status, then `bundleRelease` and internal testing.
+The code side is a final full pass and one more migration check against the
+previous release.
+
+Three small things are still owed from earlier phases and none of them block:
+the *"could not be opened"* message against a real undownloaded cloud file
+(Phase 13), a real midnight (Phase 14), and the icon polish pass.
