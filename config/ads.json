@@ -1,4 +1,1 @@
-{
-  "banners_enabled": true,
-  "native_enabled": true
-}
+{ "banners_enabled": false, "native_enabled": false }
