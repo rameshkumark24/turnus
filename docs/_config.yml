@@ -1,0 +1,15 @@
+# GitHub Pages serves this folder.
+#
+# Only the privacy policy is meant to be a public web page. The rest of docs/ is
+# working documentation that happens to live alongside it — a release runbook, a
+# store-listing draft, the Data Safety answers — and none of it is written for a
+# stranger to read. Excluding it keeps the site to the one page that has an
+# audience. All of it is still visible in the repository itself; this is about
+# what gets published as a website, not about secrecy.
+title: Turnus
+description: Privacy policy for Turnus — Shift Work Calendar
+exclude:
+  - RELEASING.md
+  - DATA_SAFETY.md
+  - STORE-LISTING.md
+  - check-listing.sh

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page.title }}</title>
+<!--
+  Deliberately no theme and no framework. A privacy policy is read once, often
+  on a phone, sometimes by a store reviewer who has thirty seconds — so it
+  should load instantly and be legible at arm's length. A Jekyll theme would
+  wrap it in a project-page sidebar that belongs to a piece of software, not to
+  a document about someone's data.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    max-width: 38rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem;
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a; background: #fff;
+  }
+  h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 .5rem; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .5rem; }
+  ul { padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  a { color: #0b6b6b; }
+  code { background: #f2f2f2; padding: .1em .3em; border-radius: 3px; font-size: .9em; }
+  hr { border: 0; border-top: 1px solid #e5e5e5; margin: 2.5rem 0; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #111; }
+    a { color: #6fd3d3; }
+    code { background: #222; }
+    hr { border-top-color: #333; }
+  }
+</style>
+</head>
+<body>
+{{ content }}
+</body>
+</html>

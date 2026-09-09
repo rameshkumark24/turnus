@@ -1,16 +1,13 @@
+---
+layout: default
+title: Privacy Policy for Turnus
+---
+
 # Privacy Policy for Turnus
 
-**Last updated: 6 September 2026**
+**Last updated: 9 September 2026**
 
-> **Before publishing:** replace `[YOUR CONTACT EMAIL]` and `[YOUR TRADER
-> ADDRESS]` below, then host this page and paste its URL into the Play Console
-> listing and the Data Safety form. Google requires a policy reachable at a
-> public URL. This draft describes what the app actually does — it was written
-> against the source, not from a template — but it is not legal advice, and you
-> are the data controller, so read it before you publish it.
-
-Turnus is a shift-work calendar for Android, published by [YOUR NAME OR
-BUSINESS], contactable at **[YOUR CONTACT EMAIL]**.
+Turnus is a shift-work calendar for Android, published by Rameshkumar Kannan, contactable at **rameshkumaroff@gmail.com**.
 
 ## The short version
 
@@ -129,7 +126,7 @@ For data collected by Google through AdMob, those rights are exercised against
 Google. Withdrawing consent in **Settings → Privacy** stops further collection
 for advertising where consent is the legal basis.
 
-For anything else, contact **[YOUR CONTACT EMAIL]**.
+For anything else, contact **rameshkumaroff@gmail.com**.
 
 ## Changes to this policy
 
@@ -139,6 +136,5 @@ collected — the app will ask for your consent again.
 
 ## Contact
 
-[YOUR NAME OR BUSINESS]
-[YOUR TRADER ADDRESS]
-[YOUR CONTACT EMAIL]
+Rameshkumar Kannan
+rameshkumaroff@gmail.com
