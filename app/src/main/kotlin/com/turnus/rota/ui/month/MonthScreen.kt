@@ -559,8 +559,13 @@ private fun HoursCard(state: MonthUiState, modifier: Modifier = Modifier) {
     // saying "0 hours" is a worse answer than no card.
     if (hours.shifts == 0) return
 
-    val label = remember(state.yearMonth, state.locale) {
-        if (state.yearMonth == YearMonth.now()) {
+    // Keyed on `state.today`, and compared against it rather than the clock. Read
+    // from the clock inside a `remember`, this caption was the one thing on the
+    // screen that could not notice a month rolling over: neither key changed, so
+    // a grid that had correctly moved its ring to 1 October went on calling
+    // September "THIS MONTH".
+    val label = remember(state.yearMonth, state.locale, state.today) {
+        if (state.yearMonth == YearMonth.from(state.today.toLocalDate())) {
             "THIS MONTH"
         } else {
             state.yearMonth.month

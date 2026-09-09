@@ -270,10 +270,18 @@ root, and the alternative — turning off automatic time on someone's daily phon
 makes every timestamp on it wrong for as long as the test runs. Moving the
 **timezone** across the date line changes the civil date while leaving the epoch
 clock correct, so nothing else on the phone was affected. `cmd
-time_zone_detector set_time_zone_state_for_tests` does it from the shell. The app
-listens for no date, time or timezone broadcast, so the two routes reached
-identical code. Timezone, auto-detection and geo-detection were recorded before
-and restored after.
+time_zone_detector set_time_zone_state_for_tests` does it from the shell.
+Timezone, auto-detection and geo-detection were recorded before and restored
+after.
+
+**What that method does not cover, corrected after review.** Before the fix the
+app listened for no date, time or timezone broadcast, so the two routes did reach
+identical code and the substitution was sound. The fix puts all three actions in
+a filter, and from that point they differ until they meet in `refreshToday()`:
+`dumpsys activity broadcasts` shows 49 `TIMEZONE_CHANGED` broadcasts across this
+testing and **no `DATE_CHANGED` at all**, and shell cannot send a protected
+broadcast to fake one. The refresh path is measured; the midnight trigger is
+Android's documented behaviour and is not. Worth one look at a real midnight.
 
 NOTE: production code was written after all, which this phase said not to expect.
 That is the phase working as intended rather than against it — the code exists

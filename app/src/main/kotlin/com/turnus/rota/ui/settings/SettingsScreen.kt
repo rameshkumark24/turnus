@@ -61,6 +61,7 @@ import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.BackupSummary
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.share.RotaBackupFile
+import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.theme.TurnusTokens
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -88,6 +89,10 @@ fun SettingsScreen(
     onChangeRota: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // The label above the nudge buttons has to be about today, not about
+    // whichever day it was when this screen opened.
+    OnDateChange(viewModel::refreshToday)
     val error by viewModel.error.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }

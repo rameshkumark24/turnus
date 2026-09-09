@@ -20,11 +20,13 @@ import com.turnus.rota.share.RotaBackupFile
 import com.turnus.rota.share.RotaCode
 import com.turnus.rota.share.RotaExport
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -111,36 +113,48 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     /**
-     * Read once, when the screen's ViewModel is created.
+     * Observable, and this one is not merely a caption.
      *
-     * Good enough here and nowhere near the engine: this only labels the nudge
-     * buttons. A settings screen left open across local midnight would show
-     * yesterday's shift until it is reopened, which is a wrong caption rather
-     * than a wrong rota.
+     * It used to be read once when the ViewModel was built, on the grounds that
+     * a settings screen left open across midnight would show "yesterday's shift
+     * until it is reopened, which is a wrong caption rather than a wrong rota".
+     * That was wrong about the consequence. This label sits directly above the
+     * nudge buttons, and their own copy tells the user to *watch the line above
+     * as you tap*. A stale label there does not mislead someone about a caption;
+     * it invites them to shift a correct rota by a day to fix a misalignment
+     * that is not real — which is the exact complaint this app exists to answer.
      */
-    private val today = DayNumber.today()
+    private val today = MutableStateFlow(DayNumber.today())
 
-    val state: StateFlow<SettingsUiState> = combine(
-        repository.observeReminderSettings(),
-        repository.observeShiftStyles(),
-        repository.observeActivePattern(),
-        // A one-day window. Recomputed on every write, so the nudge buttons
-        // below show their own effect without the user leaving the screen.
-        repository.observeCalendar(today, today),
-    ) { settings, styles, pattern, days ->
-        val resolved = days.firstOrNull()
-        SettingsUiState(
-            settings = settings,
-            workingShifts = styles.values.filter(ShiftStyle::isWorking),
-            loading = false,
-            patternName = pattern?.name.orEmpty(),
-            cycleLength = pattern?.slots?.size ?: 0,
-            todayLabel = when {
-                pattern == null -> null
-                resolved?.shiftTypeId == null -> "Off"
-                else -> styles[resolved.shiftTypeId]?.name ?: "Off"
-            },
-        )
+    /** Called from the screen when the system says the date moved. */
+    fun refreshToday() {
+        today.value = DayNumber.today()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val state: StateFlow<SettingsUiState> = today.flatMapLatest { currentDay ->
+        combine(
+            repository.observeReminderSettings(),
+            repository.observeShiftStyles(),
+            repository.observeActivePattern(),
+            // A one-day window. Recomputed on every write, so the nudge buttons
+            // below show their own effect without the user leaving the screen.
+            repository.observeCalendar(currentDay, currentDay),
+        ) { settings, styles, pattern, days ->
+            val resolved = days.firstOrNull()
+            SettingsUiState(
+                settings = settings,
+                workingShifts = styles.values.filter(ShiftStyle::isWorking),
+                loading = false,
+                patternName = pattern?.name.orEmpty(),
+                cycleLength = pattern?.slots?.size ?: 0,
+                todayLabel = when {
+                    pattern == null -> null
+                    resolved?.shiftTypeId == null -> "Off"
+                    else -> styles[resolved.shiftTypeId]?.name ?: "Off"
+                },
+            )
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),

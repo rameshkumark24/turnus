@@ -88,16 +88,24 @@ data class MonthUiState(
     }
 
     companion object {
-        fun empty(): MonthUiState {
-            val now = YearMonth.now()
+        /**
+         * The placeholder shown for the frame or two before the database
+         * answers.
+         *
+         * Both values are passed in rather than read here. They are already
+         * held by the ViewModel, and reading the clock a second time meant the
+         * placeholder and the first real emission could straddle midnight and
+         * disagree about the day.
+         */
+        fun empty(yearMonth: YearMonth, today: DayNumber): MonthUiState {
             val locale = Locale.getDefault()
             return MonthUiState(
-                yearMonth = now,
+                yearMonth = yearMonth,
                 firstDayOfWeek = localeFirstDayOfWeek(locale),
                 locale = locale,
                 days = emptyList(),
                 styles = emptyMap(),
-                today = DayNumber.today(),
+                today = today,
                 loading = true,
             )
         }
@@ -119,23 +127,6 @@ class MonthViewModel(
     private val repository: RotaRepository,
 ) : ViewModel() {
 
-    private val visibleMonth = MutableStateFlow(YearMonth.now())
-
-    /**
-     * The device locale, pushed in from the composition rather than read here.
-     *
-     * A ViewModel outlives the Activity that a locale change recreates, so
-     * `Locale.getDefault()` captured once would keep the old answer for the rest
-     * of the session. That is not a cosmetic staleness: the locale decides which
-     * day the week starts on, and a grid that starts on the wrong day puts every
-     * shift in the wrong column.
-     */
-    private val locale = MutableStateFlow(Locale.getDefault())
-
-    fun setLocale(value: Locale) {
-        locale.value = value
-    }
-
     /**
      * Which day is today, as a value that can change while the screen is open.
      *
@@ -152,6 +143,25 @@ class MonthViewModel(
     /** Called from the screen when the system says the date moved. */
     fun refreshToday() {
         today.value = DayNumber.today()
+    }
+
+    // Derived from `today` rather than reading the clock again: two reads a
+    // microsecond apart can land either side of the first of the month.
+    private val visibleMonth = MutableStateFlow(YearMonth.from(today.value.toLocalDate()))
+
+    /**
+     * The device locale, pushed in from the composition rather than read here.
+     *
+     * A ViewModel outlives the Activity that a locale change recreates, so
+     * `Locale.getDefault()` captured once would keep the old answer for the rest
+     * of the session. That is not a cosmetic staleness: the locale decides which
+     * day the week starts on, and a grid that starts on the wrong day puts every
+     * shift in the wrong column.
+     */
+    private val locale = MutableStateFlow(Locale.getDefault())
+
+    fun setLocale(value: Locale) {
+        locale.value = value
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -180,7 +190,7 @@ class MonthViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = MonthUiState.empty(),
+            initialValue = MonthUiState.empty(visibleMonth.value, today.value),
         )
 
     /**

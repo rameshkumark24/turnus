@@ -62,14 +62,14 @@ data class YearUiState(
     val longestBreak: Outlook.Stretch? by lazy { Outlook.longestBreak(days) }
 
     companion object {
-        fun empty(): YearUiState {
+        /** Both values passed in, for the reason `MonthUiState.empty` gives. */
+        fun empty(year: Int, today: DayNumber): YearUiState {
             val locale = Locale.getDefault()
-            val today = DayNumber.today()
             return YearUiState(
-                year = today.toLocalDate().year,
+                year = year,
                 firstDayOfWeek = localeFirstDayOfWeek(locale),
                 locale = locale,
-                start = DayNumber.from(LocalDate.of(today.toLocalDate().year, 1, 1)),
+                start = DayNumber.from(LocalDate.of(year, 1, 1)),
                 days = emptyList(),
                 styles = emptyMap(),
                 today = today,
@@ -83,15 +83,17 @@ class YearViewModel(
     private val repository: RotaRepository,
 ) : ViewModel() {
 
-    private val visibleYear = MutableStateFlow(DayNumber.today().toLocalDate().year)
+    /** Observable for the same reason the month grid's is — see `OnDateChange`. */
+    private val today = MutableStateFlow(DayNumber.today())
+
+    // Derived from `today` rather than reading the clock again: two reads a
+    // microsecond apart can land either side of new year.
+    private val visibleYear = MutableStateFlow(today.value.toLocalDate().year)
     private val locale = MutableStateFlow(Locale.getDefault())
 
     fun setLocale(value: Locale) {
         locale.value = value
     }
-
-    /** Observable for the same reason the month grid's is — see `OnDateChange`. */
-    private val today = MutableStateFlow(DayNumber.today())
 
     /** Called from the screen when the system says the date moved. */
     fun refreshToday() {
@@ -123,7 +125,7 @@ class YearViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = YearUiState.empty(),
+            initialValue = YearUiState.empty(visibleYear.value, today.value),
         )
 
     fun showPreviousYear() {
