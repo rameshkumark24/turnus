@@ -39,8 +39,13 @@ android {
         applicationId = "com.turnus.rota"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
+        // Increases on every upload, and never repeats — Play rejects a code it
+        // has seen, including from a bundle that was deleted.
         versionCode = 1
-        versionName = "0.1.0"
+        // 1.0.0 rather than 0.1.0: this goes to internal testing as a release
+        // candidate, not as a preview. There is no feature here waiting to
+        // arrive before the app is worth its first whole number.
+        versionName = "1.0.0"
     }
 
     buildFeatures {
@@ -60,8 +65,11 @@ android {
      * `local.properties`; a developer machine uses the file. When neither is
      * present the release build is left unsigned rather than failing, so
      * `assembleRelease` still works for checking that R8 has not broken
-     * anything, which is what it is mostly used for here. `bundleRelease`
-     * warns instead — see the lifecycle check at the bottom of this file.
+     * anything, which is what it is mostly used for here. A missing key only
+     * ever warns, because an unsigned bundle cannot be uploaded — the failure
+     * announces itself at the upload screen. Missing *ad ids* are the opposite
+     * and do fail the bundle; see the bottom of this file for why the two are
+     * treated differently.
      */
     val keystoreFile = (
         localProperties.getProperty("release.keystore")
@@ -183,4 +191,44 @@ if (localProperties.getProperty("release.keystore").isNullOrBlank() &&
         "Turnus: no release.keystore in local.properties - release builds will " +
             "be UNSIGNED and cannot be uploaded to Play. See docs/RELEASING.md.",
     )
+}
+
+/**
+ * A bundle may not be built with Google's test ad units.
+ *
+ * The warning above is not enough for this one. Every other way a release build
+ * can be wrong announces itself: an unsigned bundle is rejected at the upload
+ * screen, a bad migration crashes, a broken R8 rule throws. Shipping test ad
+ * units announces nothing at all. The app installs, runs, and fills 100% of its
+ * ad requests — with Google's demo creatives, for no money — and the first
+ * symptom is an AdMob dashboard reading zero a week later, by which time the
+ * bundle is live and the fix needs another release.
+ *
+ * With one banner as the entire business, that failure costs everything and
+ * looks like success, so `bundleRelease` refuses rather than warns.
+ *
+ * Only the bundle. `assembleRelease` keeps the fallback, because it is what
+ * `docs/RELEASING.md` tells you to run to prove R8 has not broken anything and
+ * it has to work on a machine that has no `local.properties` — including a fresh
+ * clone, CI, and whoever picks this up next.
+ */
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        val configured = localProperties.getProperty("admob.appId").orEmpty()
+        check(configured.isNotBlank() && configured != testAppId) {
+            buildString {
+                appendLine("Refusing to bundle with Google's TEST ad units.")
+                appendLine()
+                appendLine("This bundle would install, run, and serve demo adverts for no money,")
+                appendLine("with nothing to tell you until the dashboard reads zero.")
+                appendLine()
+                appendLine("Put your real ids in local.properties:")
+                appendLine("  admob.appId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY")
+                appendLine("  admob.bannerUnitId=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY")
+                appendLine("  admob.nativeUnitId=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY")
+                appendLine()
+                append("To exercise R8 without them, build assembleRelease instead.")
+            }
+        }
+    }
 }

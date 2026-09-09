@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -75,6 +76,21 @@ object RotaBackupFile {
     fun suggestedName(today: LocalDate = LocalDate.now()): String =
         "turnus-backup-${FILE_DATE.format(today)}.json"
 
+    /**
+     * Writes the backup the user asked for, and says something useful when it
+     * fails.
+     *
+     * The caller turns a thrown message straight into a snackbar, so whatever is
+     * thrown here is what the user reads. Left alone, a full disk surfaces as
+     * `ENOSPC (No space left on device)` — accurate, and no help at all to
+     * someone who has just been told their rota did not save. The two failures
+     * worth naming are the ones a person can act on: no room, and a folder that
+     * will not take the file.
+     *
+     * The rota itself is never at risk here. Nothing is deleted before or by
+     * this, so a failed save leaves the app exactly as it was and the user can
+     * try somewhere else.
+     */
     suspend fun write(context: Context, repository: RotaRepository, target: Uri) =
         withContext(Dispatchers.IO) {
             val text = RotaBackup.encode(repository.snapshot(appVersion(context)))
@@ -82,9 +98,41 @@ object RotaBackupFile {
             // in "w" mode leaves the tail of the old file in place, and the
             // result is a file that looks like a backup and will not parse.
             val stream = context.contentResolver.openOutputStream(target, "wt")
-                ?: error("The file could not be opened for writing")
-            stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                ?: throw IOException("That folder would not accept the file. Try another one.")
+            try {
+                stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+            } catch (failure: IOException) {
+                Log.i(TAG, "backup write failed", failure)
+                throw IOException(explain(failure), failure)
+            }
         }
+
+    /**
+     * Turns a write failure into a sentence.
+     *
+     * Matched on the message rather than the exception type on purpose: a full
+     * disk arrives as a plain `IOException` whose message carries the `ENOSPC`,
+     * because it comes up through a `ParcelFileDescriptor` from another app's
+     * provider rather than from a local `FileOutputStream`. There is no
+     * dedicated type to catch, so the string is what there is. Anything not
+     * recognised keeps its own message, which is better than a wrong guess.
+     */
+    private fun explain(failure: IOException): String {
+        val detail = failure.message.orEmpty()
+        return when {
+            detail.contains("ENOSPC", ignoreCase = true) ||
+                detail.contains("No space left", ignoreCase = true) ->
+                "There is not enough space to save the backup. Free some up, or " +
+                    "choose a different folder."
+
+            detail.contains("EROFS", ignoreCase = true) ||
+                detail.contains("EACCES", ignoreCase = true) ||
+                detail.contains("Permission denied", ignoreCase = true) ->
+                "That folder would not accept the file. Try another one."
+
+            else -> "The backup could not be saved. ${detail.ifBlank { "Try another folder." }}"
+        }
+    }
 
     /**
      * Never throws for bad content — a picked file is whatever the user picked.

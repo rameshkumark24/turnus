@@ -317,7 +317,8 @@ release. Contact email and EU trader status are undecided. The icon has had no
 polish pass and is the only asset judged before anything here is read.
 
 ## Phase 16 — Release candidate
-STATUS: NOT STARTED
+STATUS: **BLOCKED ON YOU** — the code side is done and proven; the upload is not
+mine to do.
 GOAL: A signed bundle uploaded to internal testing.
 BUILD: Real AdMob IDs in `local.properties`; a real upload keystore; privacy
 policy placeholders filled and hosted; Data Safety form completed from
@@ -325,11 +326,52 @@ policy placeholders filled and hosted; Data Safety form completed from
 EDGE CASES: §16 verify the migration path once more against the previous
 release; §7 storage-full during a backup write (still untested).
 DONE WHEN: A signed `.aab` is accepted by Play and installs from internal
-testing on the vivo.
+testing on the vivo. **Not reachable without your keystore and Play account, so
+this phase stops one step short of its own definition and says so.**
 DEPENDS ON: 12, 13, 15
 PLAN MODE: **yes — signing material and a public release.**
 NEEDS FROM YOU: AdMob IDs, the keystore, policy hosting, Play access. **None of
 these can be done for you.**
+
+DONE, AND PROVEN:
+
+- **A release bundle can no longer ship Google's test ad units.** `adId()` fell
+  back to them silently in a *release* build, and the only guard was a
+  `logger.lifecycle` line that scrolls past. Every other release mistake
+  announces itself — an unsigned bundle is refused at the upload screen, broken
+  R8 crashes on launch. This one installs, runs, fills 100% of its requests with
+  demo creatives for no money, and says nothing until the dashboard reads zero a
+  week after going live. With one banner as the whole business it costs
+  everything and looks like success, so `bundleRelease` now refuses.
+  `assembleRelease` keeps the fallback, because it is the R8 check and has to
+  work on a fresh clone. Verified both ways: refuses without, builds an 8.8 MB
+  signed bundle with.
+- **The minified build was run, not just assembled**, on the vivo at `1.0.0`,
+  with **zero crashes**: first run to a populated grid; reminders granted and
+  **15 alarms actually scheduled** (Room, the engine and AlarmManager together —
+  the biggest R8 risk); the Glance widget provider registered, so resource
+  shrinking did not eat it; a share code decoded; a backup written at 2,010
+  bytes; and `FLAG_SECURE` raised and cleared across the day sheet. The previous
+  minified build predated Phases 12–16, so none of this had been exercised.
+- **Version** `0.1.0` → `1.0.0`. `versionCode` stays 1 for a first upload.
+- **`docs/RELEASING.md`** now carries the bundle gate, the six on-device checks
+  with what each one proves, and an ordered pre-flight. Updated rather than
+  duplicated into a checklist, so there is one file to keep true.
+- **§7 storage-full** now says something a person can act on instead of
+  `ENOSPC (No space left on device)`.
+
+NOT DONE, AND WHY:
+
+- **The upgrade path has no previous release to test against.** `versionCode` is
+  1: this has never shipped, so schema v1 has never existed on a stranger's
+  phone. `MIGRATION_1_2` is still live for pre-release testers and still covered
+  by the instrumented test, but the first *real* migration check happens at the
+  second release, not this one. Do it then.
+- **The storage-full trigger is still unexercised.** Filling a real phone's
+  storage to prove a snackbar is not a reasonable thing to do to it.
+- **A test-signed build must be uninstalled before installing from Play** — the
+  signatures differ and the upgrade is refused. The one used for this smoke test
+  has already been removed from the vivo, and its key destroyed.
 
 ## Phase 17 — Multiple rotas *(v1.1, not v1)*
 STATUS: NOT STARTED
@@ -368,7 +410,7 @@ cutting it saves an hour and keeps two unknowns in a shipping product.
 
 *Update this section at the end of every phase.*
 
-**Last updated:** after Phase 15, before Phase 16.
+**Last updated:** after Phase 16, which stops at the upload.
 
 ## What is built
 
@@ -496,12 +538,20 @@ access · the decision in Phase 15 about naming a profession.
 
 ## Next
 
-**Phase 16 — Release candidate.** Mostly yours rather than mine: real AdMob IDs,
-an upload keystore, the privacy policy hosted, the Data Safety form filled from
-`docs/DATA_SAFETY.md`, trader status, then `bundleRelease` and internal testing.
-The code side is a final full pass and one more migration check against the
-previous release.
+**Yours, not mine.** The code is a release candidate: a minified 1.0.0 build was
+run end to end on the vivo with no crashes, and the bundle now refuses to build
+with test ad units. What is left cannot be done from here, in the order
+`docs/RELEASING.md` §6 sets out:
 
-Three small things are still owed from earlier phases and none of them block:
-the *"could not be opened"* message against a real undownloaded cloud file
-(Phase 13), a real midnight (Phase 14), and the icon polish pass.
+1. An upload keystore, and real AdMob ids in `local.properties`.
+2. The privacy policy hosted somewhere that resolves — **this blocks release**.
+3. The Data Safety form from `docs/DATA_SAFETY.md`, trader status, contact email.
+4. Screenshots and a feature graphic from the brief in `docs/STORE-LISTING.md`.
+5. `bundleRelease`, upload to **internal testing**, install from Play on the vivo.
+
+**Phase 17 (multiple rotas) is v1.1 and deliberately after the release.**
+
+Small things still owed, none blocking: the *"could not be opened"* message
+against a real undownloaded cloud file (Phase 13), a real midnight (Phase 14),
+the storage-full trigger (Phase 16), and the icon polish pass — which is the only
+asset a browsing user judges before reading a word of the listing.

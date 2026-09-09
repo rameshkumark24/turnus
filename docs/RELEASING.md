@@ -61,8 +61,8 @@ impressions from your own device are what gets an AdMob account suspended.
 In `app/build.gradle.kts`:
 
 ```kotlin
-versionCode = 1      // must increase for every upload, and never repeat
-versionName = "0.1.0" // what the user sees
+versionCode = 1       // must increase for every upload, and never repeat
+versionName = "1.0.0" // what the user sees
 ```
 
 Play rejects a bundle whose `versionCode` it has seen before, including one
@@ -76,13 +76,51 @@ from a build you deleted. Increment it before every upload, even a re-upload.
 
 The bundle lands at `app/build/outputs/bundle/release/app-release.aab`.
 
+**`bundleRelease` refuses to build without real AdMob ids.** That is deliberate
+and it is the one place in this project the build stops you rather than warns
+you. Every other release mistake announces itself — an unsigned bundle is
+rejected at the upload screen, a broken R8 rule crashes on launch. Shipping
+Google's *test* ad units announces nothing: the app installs, runs, and fills
+100% of its ad requests with demo creatives, for no money, and the first symptom
+is a dashboard reading zero a week after the bundle went live. With one banner as
+the whole business, that failure costs everything and looks like success.
+
+If you only want to exercise R8, build `assembleRelease` instead — it keeps the
+test-id fallback on purpose, so the check below works on a fresh clone, on CI,
+and for whoever picks this up next.
+
 Before uploading, run the checks that catch the things a release breaks:
 
 ```sh
-./gradlew :engine:test                       # the rota arithmetic
-./gradlew :data:connectedDebugAndroidTest    # needs a device or emulator
-./gradlew :app:assembleRelease               # proves R8 has not broken Room, WorkManager or ads
+./gradlew :engine:test :app:testDebugUnitTest  # the rota arithmetic and the paste handling
+./gradlew :data:connectedDebugAndroidTest      # needs a device or emulator
+./gradlew :app:assembleRelease                 # proves R8 has not broken Room, WorkManager or ads
+bash docs/check-listing.sh                     # the listing still fits Play's field limits
 ```
+
+### Then run the minified build on a real phone
+
+Assembling is not the same as working. Install
+`app/build/outputs/apk/release/app-release.apk` — signed, so you need the key —
+and walk it, because these are the paths R8 and resource shrinking actually
+break:
+
+| Check | What it proves |
+|---|---|
+| First run reaches a populated grid | the app shell, Compose, the setup wizard |
+| Reminders on, then `dumpsys alarm \| grep REMIND` shows alarms | Room, the engine and AlarmManager together — the biggest R8 risk |
+| The widget appears in the picker and shows today | Glance survived **resource** shrinking, not just code shrinking |
+| Paste a share code and see the preview | the engine's decoder |
+| Save a backup and check the file has bytes in it | Room, `org.json` and the file picker |
+| Open a day: the recents thumbnail should be blank | `FLAG_SECURE` is still being applied |
+
+All six passed on a vivo V2307 against `1.0.0` with zero crashes. Re-run them
+whenever a dependency moves.
+
+**Uninstall the test-signed build before installing anything from Play.** A build
+signed with a different key cannot be upgraded over — Play's install will fail
+with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the fix is an uninstall that takes
+the rota with it.
 
 ## 5. What Play asks for that is not code
 
@@ -98,14 +136,43 @@ Before uploading, run the checks that catch the things a release breaks:
 - **Trader status (EU DSA)** — an ad-funded app is a trader, and the address
   given is published on the listing.
 - **Target audience** — adults. Not a children's app, so no Families Policy.
-- **Store listing** — screenshots, a feature graphic, a short and full
-  description. The description should say plainly that Turnus is a personal
+- **Store listing** — all of it is drafted in `docs/STORE-LISTING.md`: the name,
+  both descriptions, the feature-graphic brief and an eight-shot screenshot
+  sequence with the reason each shot exists. `bash docs/check-listing.sh` checks
+  the copy against Play's field limits, which exists because two of the three
+  counts written there by hand were wrong. The description should say plainly that Turnus is a personal
   planner and **not a record of hours worked**: the hours it shows are what the
   pattern says, less unpaid breaks, and it knows nothing about overtime, a shift
   someone covered, or an hour sent home early. The month card says the same
   thing where the figure appears, and the two should agree.
 
-## 6. After the first release
+## 6. Pre-flight, in order
+
+The order matters — each step is cheap and catches something the next one would
+waste time on.
+
+1. `bash docs/check-listing.sh` — seconds, and stops a rejected listing.
+2. `./gradlew :engine:test :app:testDebugUnitTest` — the arithmetic and the paste handling.
+3. `./gradlew :data:connectedDebugAndroidTest` — needs a device.
+4. `./gradlew :app:assembleRelease`, then **run the six checks in §4 on a phone**.
+   This is the step people skip and it is the one that finds R8 damage.
+5. Bump `versionCode`. Play rejects a code it has already seen, including from a
+   bundle you deleted.
+6. `./gradlew :app:bundleRelease` — refuses without real ad ids, and is unsigned
+   without a key.
+7. Upload to **internal testing**, not production. Install from Play on a real
+   phone before promoting anything.
+8. Fill the Data Safety form from `docs/DATA_SAFETY.md` and check the privacy
+   policy URL actually resolves. A policy that 404s is a rejection.
+
+### What is not code and cannot be done for you
+
+An upload key · real AdMob ids · the privacy policy hosted somewhere public ·
+the Data Safety form · trader status and the address it publishes · a Play
+account. The build warns about the first two and refuses the bundle for the ad
+ids; the rest are yours and nothing in the repository can check them.
+
+## 7. After the first release
 
 The remote ad kill switch is `config/ads.json` in this repository, read from
 `raw.githubusercontent.com`. Setting either flag to `false` turns that slot off
