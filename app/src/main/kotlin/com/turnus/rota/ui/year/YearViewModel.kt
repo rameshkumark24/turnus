@@ -90,9 +90,17 @@ class YearViewModel(
         locale.value = value
     }
 
+    /** Observable for the same reason the month grid's is — see `OnDateChange`. */
+    private val today = MutableStateFlow(DayNumber.today())
+
+    /** Called from the screen when the system says the date moved. */
+    fun refreshToday() {
+        today.value = DayNumber.today()
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<YearUiState> = combine(visibleYear, locale, ::Pair)
-        .flatMapLatest { (year, currentLocale) ->
+    val state: StateFlow<YearUiState> = combine(visibleYear, locale, today, ::Triple)
+        .flatMapLatest { (year, currentLocale, currentDay) ->
             val start = DayNumber.from(LocalDate.of(year, 1, 1))
             val end = DayNumber.from(LocalDate.of(year, 12, 31))
             combine(
@@ -108,7 +116,7 @@ class YearViewModel(
                     days = days,
                     styles = styles,
                     definitions = definitions.associateBy { it.id },
-                    today = DayNumber.today(),
+                    today = currentDay,
                 )
             }
         }

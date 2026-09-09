@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.NativeSlot
 import com.turnus.rota.engine.DayNumber
+import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.LocalDate
 import java.time.YearMonth
@@ -71,6 +72,9 @@ fun YearScreen(
     // both the weekday the columns start on and the month abbreviations.
     val locale = LocalLocale.current.platformLocale
     LaunchedEffect(locale) { viewModel.setLocale(locale) }
+
+    // The year grid rings today too, so it needs the same midnight signal.
+    OnDateChange(viewModel::refreshToday)
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(

@@ -62,6 +62,7 @@ import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Hours
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
+import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.theme.TurnusTokens
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -78,6 +79,11 @@ fun MonthScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val showReminderPrompt by viewModel.showReminderPrompt.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Midnight. Without this the grid goes on ringing yesterday for as long as
+    // the calendar is left on screen, which is precisely the wrong answer to
+    // give someone on nights at 00:05.
+    OnDateChange(viewModel::refreshToday)
 
     // The one ask Android allows, spent only on an explicit tap. Refusing is a
     // complete answer: the card is retired either way, because asking twice is

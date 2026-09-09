@@ -234,7 +234,7 @@ backup"*, and a real backup still previews. **Worth one look with a genuine
 undownloaded Drive file before release.**
 
 ## Phase 14 — Verify the two things I reasoned about but never ran
-STATUS: NOT STARTED
+STATUS: DONE
 GOAL: Two `unverified` rows in `EDGE-CASES.md` become facts.
 BUILD: No production code expected. Test the **midnight rollover** with the app
 left open overnight (set the device clock forward rather than waiting), and the
@@ -245,6 +245,39 @@ deletion.
 DONE WHEN: Both behaviours are observed on a device and the markers are gone.
 DEPENDS ON: 7, 11
 PLAN MODE: no
+VERIFIED: On the vivo V2307. **One of the two was wrong**, which is the entire
+argument for this phase existing.
+
+- **Midnight, half by luck.** The app process was left running for 12h50m across
+  a real midnight, and on return to the foreground the ring was correctly on the
+  new day — so the "refreshes on return to foreground" half was true, and
+  observed rather than staged. The other half was not: with the app sitting in
+  the foreground and the civil date moved underneath it, the grid went on ringing
+  the old day and naming its shift. `today` was re-read on every state emission,
+  and nothing about midnight produces one.
+- **Fixed, and re-measured.** The month and year grids now register a receiver
+  for `ACTION_DATE_CHANGED` (plus the clock and timezone actions) for exactly as
+  long as they are on screen. With the app untouched in the foreground the ring
+  moved on its own, and moved back. `dumpsys activity broadcasts` shows the
+  receiver present on the month and year screens, absent on Settings, and back
+  again on return — so the `DisposableEffect` really does tear it down.
+- **The widget after "delete everything"** falls back to *"Tap to set up your
+  rota"* and stays tappable — tapping it opened the setup wizard. The alarm
+  window is emptied at the same moment.
+
+HOW THE CLOCK WAS MOVED: not by setting it. `adb` cannot set the clock without
+root, and the alternative — turning off automatic time on someone's daily phone —
+makes every timestamp on it wrong for as long as the test runs. Moving the
+**timezone** across the date line changes the civil date while leaving the epoch
+clock correct, so nothing else on the phone was affected. `cmd
+time_zone_detector set_time_zone_state_for_tests` does it from the shell. The app
+listens for no date, time or timezone broadcast, so the two routes reached
+identical code. Timezone, auto-detection and geo-detection were recorded before
+and restored after.
+
+NOTE: production code was written after all, which this phase said not to expect.
+That is the phase working as intended rather than against it — the code exists
+because a measurement contradicted a written claim.
 
 ## Phase 15 — The store listing
 STATUS: NOT STARTED
@@ -314,7 +347,7 @@ cutting it saves an hour and keeps two unknowns in a shipping product.
 
 *Update this section at the end of every phase.*
 
-**Last updated:** after Phase 13, before Phase 14.
+**Last updated:** after Phase 14, before Phase 15.
 
 ## What is built
 
@@ -344,15 +377,41 @@ V2307) and an emulator.
 
 ## Known-wrong, deliberately not yet fixed
 
-All four items that stood here were fixed in Phase 13. Nothing has replaced them.
+Nothing from Phases 13 or 14 is left open. Two smaller things are known, written
+down in `EDGE-CASES.md`, and deliberately scheduled rather than forgotten:
 
-The two remaining `unverified` behaviours are Phase 14's job: the midnight
-rollover with the app left open, and the widget after a full delete-everything.
+- **Reminders are not rescheduled when the timezone changes.** Phase 14 fixed the
+  visible half of this — the grids now correct themselves — but an alarm set from
+  a wall-clock time still fires on the old offset after a flight. Ranking #7, v1.1.
+- **An imported share code has no cycle-length ceiling**, where the setup builder
+  enforces forty days. Confirmed by reading in Phase 14; harm is low because
+  every consumer resolves per day rather than walking the cycle. v1.1.
 
 ## Blocked on you, not on code
 
 AdMob IDs · an upload keystore · hosting the privacy policy · Play production
 access · the decision in Phase 15 about naming a profession.
+
+## Carried forward from Phase 14
+
+- **A written claim was wrong, and only running it found that out.** The midnight
+  row had reasoned its way to "believed correct" and was half right, which is the
+  worst kind: the half that was true (foreground return) hid the half that was
+  not (staying in the foreground). Worth remembering when reading the rows still
+  marked *believed correct* elsewhere in `EDGE-CASES.md` — two remain, on RTL
+  layout and on a storage-full backup write.
+- **The date-change fix has no automated test**, and adding a fair one means
+  injecting a clock into two ViewModels — a larger change than the fix. It is
+  covered instead by a device measurement in both directions plus a
+  receiver-lifecycle check. Recorded so the gap is a decision rather than an
+  oversight.
+- **The settings screen is still deliberately stale** across midnight; it already
+  says so in its own comment, and it captions a nudge button rather than
+  answering "what am I on today".
+- **An AdMob debug overlay** ("native ad validator — no implementation issues
+  found") appears over the UI after visiting the year view in a debug build, and
+  silently swallows scrolling. Harmless, debug-only, and worth knowing before it
+  wastes ten minutes again.
 
 ## Carried forward from Phase 13
 
@@ -394,7 +453,8 @@ access · the decision in Phase 15 about naming a profession.
 
 ## Next
 
-**Phase 14 — Verify the two things I reasoned about but never ran.** No
-production code expected: the midnight rollover with the app left open, and the
-widget after a full delete-everything. Add to it the one item Phase 13 could not
-observe — the *"could not be opened"* message against a real cloud file.
+**Phase 15 — The store listing.** Title, short and long description, screenshot
+sequence, feature graphic, all drafted into `docs/`. It is writing rather than
+code, and it **needs one decision from you**: whether to target a profession by
+name. Still outstanding from Phase 13: one look at the *"could not be opened"*
+message against a real undownloaded cloud file.

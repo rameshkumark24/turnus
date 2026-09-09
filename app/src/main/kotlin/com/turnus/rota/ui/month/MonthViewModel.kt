@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -137,9 +136,27 @@ class MonthViewModel(
         locale.value = value
     }
 
+    /**
+     * Which day is today, as a value that can change while the screen is open.
+     *
+     * It used to be read inline when the state was assembled, which refreshed it
+     * whenever the rota changed, the month was paged, or the screen came back to
+     * the foreground — and never at midnight, because nothing about midnight
+     * touches the database. A calendar left on screen went on ringing yesterday.
+     *
+     * A `StateFlow` also conflates an unchanged day, so the clock nudges that
+     * arrive alongside a real date change cost nothing.
+     */
+    private val today = MutableStateFlow(DayNumber.today())
+
+    /** Called from the screen when the system says the date moved. */
+    fun refreshToday() {
+        today.value = DayNumber.today()
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<MonthUiState> = combine(visibleMonth, locale, ::Pair)
-        .flatMapLatest { (month, currentLocale) ->
+    val state: StateFlow<MonthUiState> = combine(visibleMonth, locale, today, ::Triple)
+        .flatMapLatest { (month, currentLocale, currentDay) ->
             val firstDay = localeFirstDayOfWeek(currentLocale)
             val (start, end) = gridRange(month, firstDay)
             // Combined inside flatMapLatest, not alongside it, so the label and
@@ -156,7 +173,7 @@ class MonthViewModel(
                     days = days,
                     styles = styles,
                     definitions = definitions.associateBy { it.id },
-                    today = DayNumber.today(),
+                    today = currentDay,
                 )
             }
         }
@@ -173,14 +190,14 @@ class MonthViewModel(
      * depend on the visible month: paging to December must not change the answer
      * to "when am I next off".
      *
-     * `today` is read inside the flow, not captured once. Under
-     * `WhileSubscribed` the upstream is cancelled when the screen goes away and
-     * restarted when it comes back, so the date refreshes on return to the
-     * foreground — which is when someone who left the app open overnight looks
-     * at it again.
+     * Driven by the same [today] as the grid, so the two can never disagree
+     * about which day it is. Under `WhileSubscribed` the upstream is also
+     * cancelled when the screen goes away and restarted when it comes back, so
+     * a date change missed while the app was in the background is picked up on
+     * return as well.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val outlook: StateFlow<Outlook.Summary?> = flow { emit(DayNumber.today()) }
+    val outlook: StateFlow<Outlook.Summary?> = today
         .flatMapLatest { repository.observeOutlook(it) }
         .stateIn(
             scope = viewModelScope,
