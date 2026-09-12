@@ -35,17 +35,40 @@ Yes.
 ### Device or other IDs
 - Collected: **Yes**
 - Shared: **Yes** (with Google as an advertising partner)
-- Processed ephemerally: No
-- Required or optional: **Optional** — users in consent regions may decline
-- Purpose: **Advertising or marketing**
+- Processed ephemerally: **No** — Google retains ad-request data beyond the request
+- Required or optional: **Required**
+- Purpose: **Advertising or marketing** (both collection and sharing)
 
 ### Location — Approximate location
 - Collected: **Yes** (derived from IP address by the ads SDK)
 - Shared: **Yes**
-- Purpose: **Advertising or marketing**
+- Processed ephemerally: **No**
+- Required or optional: **Required**
+- Purpose: **Advertising or marketing** (both collection and sharing)
 
 > Declare this even though the app requests no location permission. IP-derived
 > coarse location still counts, and omitting it is a common cause of rejection.
+
+> **Required, not Optional — this was filed differently from how it was first
+> drafted here, and the correction is the useful part.** The draft said Optional
+> on the reasoning that a user can decline consent. They can, but only where UMP
+> says consent is required: `AdGate` calls `loadAndShowConsentFormIfRequired`,
+> and the Settings *"Ad privacy choices"* card is gated on
+> `privacyOptionsRequired`. Both are essentially the EEA and the UK. A user in
+> India or the United States is never offered the choice inside the app.
+>
+> Approximate location is the clearer case of the two, because it is derived
+> from the IP address on the request: even deleting the advertising ID in
+> Android settings does not stop it.
+>
+> The asymmetry decides it. Declaring *Optional* when most users get no choice
+> is an over-claim on a public store listing. Declaring *Required* when some
+> users do get one understates the app slightly and carries no policy risk.
+> Both data types are declared the same way on purpose — one SDK answered two
+> ways invites a question with no good answer.
+>
+> If the consent form is ever shown to every user rather than only where it is
+> required, this becomes **Optional** and should be changed back.
 
 ### App activity / App info and performance
 - Only if you later add analytics or crash reporting. **Today: No.**
@@ -64,7 +87,9 @@ Yes.
 
 ## Other declarations
 
-- **Data is encrypted in transit:** Yes (the ads SDK and the config fetch use HTTPS)
+- **Data is encrypted in transit:** Yes — there are exactly two network paths,
+  the ads SDK and the config fetch in `AdConfig`, and both are HTTPS
+- **Account creation:** none, and no sign-in with an account made elsewhere
 - **Users can request deletion:** Yes — uninstalling or clearing app data removes
   everything the app stores; ad data is requested from Google
 - **Committed to the Play Families Policy:** No (not a children's app)
