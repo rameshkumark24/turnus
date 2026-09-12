@@ -119,22 +119,42 @@ until you open it again. Turnus rebuilds its reminders every time you open it.
 
 ### App icon — 512 × 512 PNG, 32-bit, no alpha
 
-Exists. **Has had no polish pass** (`BUILD-PLAN.md`), and this is the last
-moment to do one. Everything else on this page is words; the icon is the only
-asset a browsing user judges before reading any of them.
+**Done: `docs/play/icon-512.png`** — 512 × 512, RGBA, alpha fully opaque, 7 KB.
+Generated from the same vector the app ships, so the store icon and the launcher
+icon cannot drift apart.
+
+The mark is four bars, two worked and two off. The 2-on-2-off motif reads as a
+rotation rather than as a generic calendar page, and it is the same language as
+the coloured runs in the month grid.
+
+**What the polish pass actually fixed.** The first version ran its fourth bar out
+to x=95 on the 108dp canvas so the bar was cut off, to say the pattern keeps
+going. An adaptive icon only guarantees the inner **66dp circle**, and a launcher
+does not cut artfully: a circular mask deleted that bar outright — leaving two
+worked days and one off, which is not the motif — and a squircle left a sliver
+that read as a rendering fault. Either way the mark sat visibly left of centre.
+The run is now 60dp wide, centred, farthest corner 32.7dp from the middle, so it
+survives every mask shape intact. Checked at 48px and 36px, and against the
+Android 13+ themed icon on both a light and a dark ground.
 
 ### Feature graphic — 1024 × 500 PNG or JPG, no alpha, no transparency
+
+**Done: `docs/play/feature-graphic.png`** — 1024 × 500, RGB with no alpha
+channel at all, 37 KB. Regenerate with `python docs/play/render-feature.py`.
 
 The one asset that must work with no text read at all, because it is shown
 cropped and often behind a play button.
 
-- **Left two-thirds:** a month grid, cropped so the coloured cells read as a
-  *pattern* — the blocks of four are the recognisable thing, not the dates.
-  Real data, not lorem: use a 4-on-4-off September.
-- **Right third:** the wordmark and one line: **Nothing is ever locked.**
-- **No screenshot chrome, no phone bezel, no "Download now".**
-- Dark ground with the app's own palette, so it matches the screenshots below.
-- Nothing important in the outer 5% — Play crops it at some sizes.
+- **Left two-thirds:** September 2026 on a real 4-on-4-off rotation — the same
+  month as the screenshots, so the store images agree with each other. It bleeds
+  off the left, top and bottom, which is what makes the blocks of four read as a
+  *pattern* rather than as a photograph of a calendar.
+- **Right third:** the four-bar mark, the wordmark, and **Nothing is ever
+  locked.** Nothing sits in the outer 5% or the middle.
+- Colours are the app's own, taken from the source rather than matched by eye:
+  `COLOR_DAY` `#E0A33C` from `RotaRepository`, and `GroundD` / `SurfaceAltD` /
+  `InkD` / `AccentD` from `Theme.kt`.
+- No screenshot chrome, no phone bezel, no "Download now".
 
 ## 5. Screenshot sequence — 8 phone screenshots, in this order
 
@@ -204,7 +224,7 @@ something like *"swapped with Dave"*.
 | Ads | Yes, contains ads | Decided |
 | In-app purchases | **No** — and this must stay No | Decided |
 | Data safety | `docs/DATA_SAFETY.md` | Drafted, form not filled |
-| Privacy policy URL | `docs/privacy-policy.md` | **Written but not hosted — blocks release** |
+| Privacy policy URL | Live, and linked in Settings | Done — reachability checked by `docs/check-listing.sh` |
 | Contact email | Needed | **Not decided** |
 | Trader status | Required in the EU | **Not decided** |
 

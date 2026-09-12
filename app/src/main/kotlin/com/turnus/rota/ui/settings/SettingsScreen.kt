@@ -68,6 +68,20 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
+/**
+ * The published privacy policy.
+ *
+ * Play wants a policy it can reach from the listing, and users want one they
+ * can reach from the app -- this is the second. It is a GitHub Pages URL
+ * rather than a bundled asset so the policy can be corrected without shipping
+ * a release, which matters because the document makes promises about what the
+ * app does and those have to be able to follow the app.
+ *
+ * If this ever 404s, the listing is rejected. It is checked by
+ * `docs/check-listing.sh`.
+ */
+const val PRIVACY_POLICY_URL = "https://rameshkumark24.github.io/turnus/privacy-policy"
+
 /** The lead times worth offering. More than this is a picker nobody wants. */
 private val LEAD_CHOICES = listOf(
     0 to "At the start",
@@ -574,9 +588,56 @@ fun SettingsScreen(
             // whether the user wants reminders, and burying the only way to
             // withdraw it behind an unrelated switch would not be offering it.
             val activity = remember(context) { context.findActivity() }
+
+            Spacer(Modifier.height(18.dp))
+            Text("Privacy", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+
+            // The heading and this card are unconditional, and that is the
+            // point of them. The ad-choices card below is only offered where
+            // UMP says consent can be withdrawn, which is essentially the EEA
+            // and the UK -- so while this section was gated on that, every
+            // user outside it had no Privacy section at all and no route to
+            // the policy from inside the app. Play requires the policy to be
+            // reachable, and a link only some users can see is not reachable.
+            Card {
+                Text("The privacy policy", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Turnus keeps your rota on this phone and has no account and " +
+                        "no server. The policy says what that means, and what the " +
+                        "adverts can see.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        // Not resolveActivity first: from Android 11 that needs
+                        // a <queries> entry to see a browser at all and would
+                        // report "none" on a phone that has one. Starting it
+                        // and catching the failure needs no manifest change.
+                        val opened = runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)),
+                            )
+                        }.isSuccess
+                        if (!opened) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "No app on this phone can open a web page. " +
+                                        "The policy is at $PRIVACY_POLICY_URL",
+                                    duration = SnackbarDuration.Long,
+                                )
+                            }
+                        }
+                    },
+                ) {
+                    Text("Read the privacy policy")
+                }
+            }
+
             if (activity != null && remember(activity) { AdGate.privacyOptionsRequired(activity) }) {
-                Spacer(Modifier.height(18.dp))
-                Text("Privacy", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(10.dp))
                 Card {
                     Text("Ad privacy choices", style = MaterialTheme.typography.titleMedium)

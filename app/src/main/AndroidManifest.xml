@@ -48,9 +48,23 @@
             android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
             android:value="true" />
 
+        <!--
+          Portrait, deliberately. Nothing here is a technical limitation: the
+          year grid already chooses its column count from the width available,
+          and the month grid would stretch. It is locked because a landscape
+          layout that has never been looked at is not a feature, and a rota is
+          read the way a phone is held. Unlocking it is a decision plus a pass
+          on every screen, not an attribute.
+
+          It is not absolute. From API 36 Android ignores an orientation
+          request on displays 600dp and wider, so a tablet or an unfolded
+          foldable will still rotate into that unexamined layout. Phones, which
+          is everyone this app is for, will not.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.Turnus"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

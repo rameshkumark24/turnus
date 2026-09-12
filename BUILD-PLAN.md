@@ -313,8 +313,9 @@ exists, and the rest of the Play form. `docs/check-listing.sh` checks the copy
 against Play's field limits; two of the three counts written by hand were wrong,
 which is why it exists.
 STILL YOURS: the privacy policy is written but **not hosted**, and that blocks
-release. Contact email and EU trader status are undecided. The icon has had no
-polish pass and is the only asset judged before anything here is read.
+release. Contact email and EU trader status are undecided. The icon is done
+(`docs/play/icon-512.png`); the **feature graphic** is not, and it is the only
+asset a browsing user judges before reading a word of the listing.
 
 ## Phase 16 — Release candidate
 STATUS: **BLOCKED ON YOU** — the code side is done and proven; the upload is not
@@ -436,7 +437,98 @@ V2307) and an emulator.
 
 - Phases 12–17 above.
 - The widget **picker thumbnail** does not render (parked, `EDGE-CASES.md` §13).
-- The app icon is a real design, not a placeholder, but has had no polish pass.
+- The **feature graphic** (1024x500) has not been made. The listing cannot go
+  up without it.
+
+## Store-submission pass — DONE (code), BLOCKED ON YOU (the Console)
+
+A full submission checklist was walked. Four gaps were code and are closed; two
+more defects were found by finally running the `LowEnd_A9` emulator, which had
+been created and never started.
+
+**Privacy policy, linked in-app.** Play wants it reachable and it was not: the
+only URL in the app was the ad-config endpoint. The bigger half of this is that
+Settings' whole *Privacy* heading sat inside
+`if (AdGate.privacyOptionsRequired(activity))` — true essentially only in the
+EEA and UK — so every user outside that had no privacy section at all. The
+policy card is now unconditional and the ad-choices card keeps the condition.
+`docs/check-listing.sh` now reads `PRIVACY_POLICY_URL` out of the Kotlin and
+curls it, so the link in the app and the link on the listing cannot drift and a
+404 fails the check rather than the review.
+
+**A force-update mechanism.** `min_version` in `config/ads.json`, compared
+against `BuildConfig.VERSION_CODE`, showing a dialog that cannot be dismissed.
+It is the only lever that exists on the day a broken build is live and review is
+three days away. It fails open on every path — absent key, bad JSON, no network,
+negative value — and `config/README.md` says plainly that it is a live grenade,
+because undoing a mistaken push needs the blocked user to be online.
+
+Writing it found a hole in something already shipped. `AdGate.onConsentResolved`
+returned early when consent did not permit ads, and `onConfigNeeded()` sat below
+that return — so **a user who declined consent never fetched the config at all.**
+The ad switches did not care, because their answer was already "off". The kill
+switch cared entirely: it would have been missing exactly the people who had
+already said no to something. The fetch now happens before the branch.
+
+**Portrait, deliberately.** No `screenOrientation` was set, so the app rotated
+into a landscape layout nobody had looked at. Locked, with the API 36 caveat
+written into the manifest: Android ignores this on displays 600dp and wider, so
+a tablet still rotates.
+
+**`YearUiState.loading` was a dead field** — set, never read. It now does what
+`MonthUiState.loading` does on the month screen: a caption while the database
+answers, rather than a silent gap where two numbers are about to appear.
+
+### Found by running it, not by reading it
+
+- **The month title truncated to "Sep 2..." on a 360dp phone, at normal font
+  size.** The header chose between its row and stacked layouts on font scale
+  alone; width was never considered. 360dp is an ordinary phone, not an edge
+  case, and the year was hidden on the one control whose job is saying which
+  month you are looking at.
+
+  Worth keeping for the method rather than the bug: the first fix computed
+  whether the title *ought* to fit, by measuring it and subtracting the
+  controls. It said it fitted, by 4dp. It still truncated on screen, because
+  five Material buttons' real widths depend on glyph metrics and minimum sizes
+  that the arithmetic got slightly wrong — and being 4dp optimistic is
+  indistinguishable from being right until it truncates. The shipped fix asks
+  the `Text` whether it actually overflowed and latches on that, so no number
+  here has to stay true for any locale, font or screen. Verified stacked at
+  360dp and *not* stacked at 411dp, which is the regression that matters.
+
+- **The kill switch is only as prompt as the ads SDK.** `AdConfig.refresh` is
+  reached through `AdGate.start`, so on the emulator — with out-of-date Play
+  services — the block took **26 seconds** to appear after launch. It arrives on
+  every path including a consent failure, so it does arrive; it is not instant.
+  Written down rather than fixed, because the alternative is a second fetch site
+  and the mechanism is a last resort, not a gate.
+
+### Measured on `LowEnd_A9` (API 28, 720x1280 @ 320dpi = 360 x 640dp)
+
+- First run, setup wizard and the populated grid, all correct at 360dp.
+- **Portrait lock proven with a control**: with `user_rotation=1` the system
+  Settings app went to `ROTATION_90` and Turnus stayed at `ROTATION_0`.
+- The privacy policy button launched Chrome on the right URL.
+- **The force-update dialog, seen on a screen.** Airplane mode on, a cached
+  `min_version=2` against `versionCode=1`: the fetch failed with
+  `UnknownHostException`, the cached value applied, and the dialog appeared over
+  a visible calendar. Two back presses and a tap outside did not shift it.
+  Network back on, the real config read `minVersion=0`, and the block lifted.
+- **Offline is no longer only reasoned about** — that airplane-mode run is the
+  first time §2's fail-open path has actually been exercised.
+- The live `ads.json` still has no `min_version` key, and the app read it as `0`:
+  an old config against a new app fails open, confirmed rather than assumed.
+
+**Not verified:** the declined-consent branch of that fix. UMP on this emulator
+reported `canRequestAds() == true` even after *Manage options → Confirm choices*
+with nothing enabled, so `consent does not permit ads` was never reached. The
+change is an unconditional call moved above a return and is plain to read, but it
+has not been watched happening.
+
+**Still blocked on you:** the Console forms (Data safety, content rating), the
+Pre-Launch Report, a staged rollout, a second copy of the upload keystore, the
+feature graphic, and screenshots 02 and 07.
 
 ## Known-wrong, deliberately not yet fixed
 
@@ -553,5 +645,4 @@ with test ad units. What is left cannot be done from here, in the order
 
 Small things still owed, none blocking: the *"could not be opened"* message
 against a real undownloaded cloud file (Phase 13), a real midnight (Phase 14),
-the storage-full trigger (Phase 16), and the icon polish pass — which is the only
-asset a browsing user judges before reading a word of the listing.
+and the storage-full trigger (Phase 16).

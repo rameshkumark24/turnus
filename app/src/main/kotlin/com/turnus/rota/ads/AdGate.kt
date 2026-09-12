@@ -129,6 +129,17 @@ object AdGate {
         onConfigNeeded: () -> Unit,
     ) {
         consentAllowsAds = consent.canRequestAds()
+
+        // Before the consent branch, deliberately. The same file carries the
+        // ad switches and `min_version`, and the second of those has nothing
+        // to do with advertising: it is the only way to stop a broken release
+        // running. While this sat below the early return, a user who declined
+        // consent never fetched the config and so could never be told to
+        // update -- the kill switch was missing exactly the people who had
+        // already said no to something. Fetching is safe either way, because
+        // applyConfig re-checks consent before it turns any slot on.
+        onConfigNeeded()
+
         if (!consentAllowsAds) {
             Log.i(TAG, "consent does not permit ads")
             _bannersAllowed.value = false
@@ -140,7 +151,6 @@ object AdGate {
         if (initialised.compareAndSet(false, true)) {
             MobileAds.initialize(context) { Log.i(TAG, "ads sdk ready") }
         }
-        onConfigNeeded()
         applyConfig(AdConfig.current)
     }
 

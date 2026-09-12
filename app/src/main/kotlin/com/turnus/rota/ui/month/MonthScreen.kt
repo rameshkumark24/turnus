@@ -38,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -239,18 +241,18 @@ private fun MonthHeader(
     onOpenSettings: () -> Unit,
     onOpenYear: () -> Unit,
 ) {
-    val stacked = LocalDensity.current.fontScale > 1.15f
+    val titleStyle = MaterialTheme.typography.headlineSmall
 
     @Composable
-    fun Title(modifier: Modifier = Modifier) = Text(
+    fun Title(modifier: Modifier = Modifier, onOverflow: () -> Unit = {}) = Text(
         text = title,
-        style = MaterialTheme.typography.headlineSmall,
+        style = titleStyle,
         color = MaterialTheme.colorScheme.onBackground,
-        // The stacked layout gives this the full width, so one line always
-        // holds. The guard stays for whatever locale has a longer month name
-        // than anything tested here.
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
+        // The layout's own answer to "did this fit", rather than anyone's
+        // arithmetic about it. See the note on `stacked` below.
+        onTextLayout = { if (it.hasVisualOverflow) onOverflow() },
         modifier = modifier,
     )
 
@@ -263,20 +265,47 @@ private fun MonthHeader(
         StepButton(label = "⋮", description = "Settings", onClick = onOpenSettings)
     }
 
-    if (stacked) {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
-            Title(Modifier.fillMaxWidth())
-            Row(verticalAlignment = Alignment.CenterVertically) { Controls() }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val density = LocalDensity.current
+
+        // Two separate reasons to stack, and they are not the same failure.
+        // A large font scale makes the controls themselves too wide; a narrow
+        // screen leaves the title too little even at normal text size. The
+        // second was missed, and on a 360dp phone -- an ordinary size, not an
+        // edge case -- September read "Sep 2...", hiding the year on the one
+        // control whose whole job is saying which month you are looking at.
+        //
+        // The width test is the Text reporting its own overflow, not a
+        // calculation of what ought to fit. Predicting it was tried and was
+        // wrong by a few dp: the controls are five Material buttons whose real
+        // widths depend on glyph metrics and minimum sizes, and being 4dp
+        // optimistic is indistinguishable from being right until it truncates.
+        // This asks the layout instead, so it holds for any locale, font and
+        // screen without a number here to keep true.
+        //
+        // The flag only ever latches on, and is remembered against the things
+        // that could change the answer. Nothing can unset it within one title
+        // and width, so the row cannot oscillate between the two layouts.
+        var titleOverflowed by remember(title, maxWidth, density.fontScale) {
+            mutableStateOf(false)
         }
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Title(Modifier.weight(1f))
-            Controls()
+        val stacked = density.fontScale > 1.15f || titleOverflowed
+
+        if (stacked) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+                Title(Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) { Controls() }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Title(Modifier.weight(1f), onOverflow = { titleOverflowed = true })
+                Controls()
+            }
         }
     }
 }

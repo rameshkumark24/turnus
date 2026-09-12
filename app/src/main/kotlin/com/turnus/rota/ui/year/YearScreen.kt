@@ -141,6 +141,20 @@ fun YearScreen(
  */
 @Composable
 private fun YearSummary(state: YearUiState) {
+    // A caption rather than a spinner, which is the same answer the month grid
+    // gives in TodaySummary: the database replies in a frame or two, and a
+    // spinner that appears and vanishes reads worse than nothing. Saying so is
+    // still better than a silent gap where two numbers are about to appear,
+    // because a year of empty blocks with no caption looks like a rota that
+    // has not been entered rather than one still being counted.
+    if (state.loading) {
+        Text(
+            text = "Working out your year",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
     if (state.days.isEmpty()) return
     val best = state.longestBreak
 

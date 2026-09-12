@@ -1,4 +1,6 @@
 {
+  "_comment": "Live config, read by every install. See config/README.md before editing min_version.",
   "banners_enabled": true,
-  "native_enabled": true
+  "native_enabled": true,
+  "min_version": 0
 }

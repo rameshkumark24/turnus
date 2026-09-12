@@ -32,6 +32,7 @@ import com.turnus.rota.ui.OnDateChange
 import com.turnus.rota.ui.RootState
 import com.turnus.rota.ui.RootViewModel
 import com.turnus.rota.ui.TodayClock
+import com.turnus.rota.ui.UpdateRequiredDialog
 import com.turnus.rota.ui.month.MonthScreen
 import com.turnus.rota.ui.month.MonthViewModel
 import com.turnus.rota.ui.setup.SetupScreen
@@ -62,6 +63,13 @@ class MainActivity : ComponentActivity() {
     private var showDay by mutableStateOf<ShowDay?>(null)
     private var showDayCount = 0
 
+    /**
+     * Set only by a successful config read that names a version newer than this
+     * one. Never true by default, never true offline on a first run, and never
+     * true because something failed -- see [AdConfig].
+     */
+    private var updateRequired by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -82,13 +90,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    TurnusApp(
-                        repository = repository,
-                        clock = clock,
-                        onRotaChanged = ::syncReminders,
-                        onCalendarShown = ::startAds,
-                        showDay = showDay,
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        TurnusApp(
+                            repository = repository,
+                            clock = clock,
+                            onRotaChanged = ::syncReminders,
+                            onCalendarShown = ::startAds,
+                            showDay = showDay,
+                        )
+                        // Over the app rather than instead of it. A dialog with
+                        // a blank screen behind it reads as a crash; the user
+                        // should be able to see their calendar is still there
+                        // while being told they cannot use this build of it.
+                        if (updateRequired) UpdateRequiredDialog()
+                    }
                 }
             }
         }
@@ -148,7 +163,11 @@ class MainActivity : ComponentActivity() {
     private fun startAds() {
         AdGate.start(this) {
             (application as TurnusApplication).applicationScope.launch {
-                AdGate.applyConfig(AdConfig.refresh(applicationContext))
+                val config = AdConfig.refresh(applicationContext)
+                AdGate.applyConfig(config)
+                // Snapshot state is safe to write from any thread; the
+                // recomposition it schedules happens on the main one.
+                updateRequired = config.minVersion > BuildConfig.VERSION_CODE
             }
         }
     }

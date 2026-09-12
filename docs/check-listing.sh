@@ -35,6 +35,25 @@ else
   printf 'FAIL  %-18s %4s / 4000  (%s over)\n' "full description" "$n" "$((n - 4000))"; fail=1
 fi
 
+# The privacy policy. A 404 here is a rejection, and the app now links to it
+# from Settings as well, so there are two places it has to be right.
+echo
+echo "Privacy policy:"
+src="$(dirname "$0")/../app/src/main/kotlin/com/turnus/rota/ui/settings/SettingsScreen.kt"
+url=$(sed -n 's/^const val PRIVACY_POLICY_URL = "\(.*\)"$/\1/p' "$src")
+if [ -z "$url" ]; then
+  printf 'FAIL  no PRIVACY_POLICY_URL found in SettingsScreen.kt\n'; fail=1
+else
+  printf '      in-app link: %s\n' "$url"
+  # --max-time so a hung host cannot hang the check; -L because Pages redirects.
+  code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 20 "$url" || echo "000")
+  if [ "$code" = "200" ]; then
+    printf 'PASS  policy reachable        %s\n' "$code"
+  else
+    printf 'FAIL  policy NOT reachable    %s  <- Play rejects this\n' "$code"; fail=1
+  fi
+fi
+
 echo
 echo "Claims that must not appear (see STORE-LISTING.md section 7):"
 for banned in "pay" "salary" "earnings" "scan" "sync"; do
