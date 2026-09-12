@@ -172,26 +172,42 @@ then. Every caption below is an overlay, not part of the app.
 | 7 | Home-screen widget beside the app icon | **Today's shift, without opening anything** | The most-used surface |
 | 8 | Hours card, "Rostered — not a record of what you worked" | **Hours, honestly counted** | Sets the expectation that stops a bad review |
 
-### What is captured and what is not
+### What is captured
 
-Six of the eight are in `docs/screenshots/`, taken on a vivo V2307, cropped to
-**1080 x 1920** — the device is 1080 x 2400, which is 2.22:1 and more elongated
-than Play accepts, so a 16:9 window is cut from the content rather than the image
-being squashed. Confirm the current requirement in Console at upload rather than
-trusting a number written here.
+All eight are in `docs/screenshots/`, every one **1080 x 1920**.
 
-| File | Shot |
-|---|---|
-| `01-calendar.png` | the month grid, with the reminder offer |
-| `03-sharecode.png` | a pasted code previewing someone else's rota |
-| `04-year.png` | the year, with working days, hours and longest break |
-| `05-nudge.png` | out by a day, and the two buttons that fix it |
-| `06-day.png` | changing a day, with a note |
-| `08-hours.png` | the hours card and its "rostered" caveat |
+| File | Shot | Taken on |
+|---|---|---|
+| `01-calendar.png` | the month grid, with the reminder offer | vivo V2307 |
+| `02-reminder.png` | a real reminder on a lock screen | emulator, API 36 |
+| `03-sharecode.png` | a pasted code previewing someone else's rota | vivo V2307 |
+| `04-year.png` | the year, with working days, hours and longest break | vivo V2307 |
+| `05-nudge.png` | out by a day, and the two buttons that fix it | vivo V2307 |
+| `06-day.png` | changing a day, with a note | vivo V2307 |
+| `07-widget.png` | the widget on a home screen | emulator, API 36 |
+| `08-hours.png` | the hours card and its "rostered" caveat | vivo V2307 |
 
-**Still to capture: 02 (a reminder on the lock screen)** — it needs an alarm to
-actually fire, so it is a wait rather than a tap — **and 07 (the widget)**, which
-has to be placed on a home screen by hand.
+The six from the vivo are 1080 x 2400 cropped to a 16:9 window, because 2.22:1
+is more elongated than Play accepts and squashing the image is worse than
+cutting it. The two from the emulator were taken at `wm size 1080x1920`, so
+they are native rather than cropped.
+
+**02 and 07 are on an emulator deliberately, and it is not only convenience.**
+Both show the phone *outside* the app — a lock screen and a home screen — and on
+a real device those carry the owner's notifications, wallpaper and installed
+apps. An early attempt at 02 on the vivo captured a private conversation and was
+deleted. A stock launcher has none of that to leak.
+
+**02 was not staged.** A real exact alarm fired at 07:00 for a 07:30 shift with
+a 30-minute lead, which is why the notification reads *"Starts at 07:30 today"*
+and carries a real timestamp. The emulator clock was moved to a morning hour
+with `cmd time_detector` so the shot would look like the moment it is meant to
+show, rather than a reminder at half past eleven at night.
+
+**Known blemish in 07:** the launcher is rendering the app icon in the dock as
+an Android 13+ *themed* icon, so it appears in the wallpaper's colours rather
+than the app's teal. The widget itself — the subject of the shot — is correct.
+Turning themed icons off and retaking would fix it.
 
 **Three things that had to be worked around, worth knowing before redoing these:**
 
