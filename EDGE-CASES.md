@@ -57,9 +57,18 @@ sheet's shift list is driven by an observed flow and should recompose the row aw
 
 ## 2. Network
 
-There is exactly one request in the entire app: fetching the advert config
-(`TRD.md` §4). No user data is ever transmitted. That makes this whole category
-smaller than it looks and much less dangerous.
+There is exactly one request in the entire app: fetching the remote config
+(`TRD.md` §4) — the advert switches and, since the store-submission pass, the
+`min_version` that stops a broken release running. No user data is ever
+transmitted. That makes this whole category smaller than it looks and much less
+dangerous.
+
+**Exercised, not only reasoned about.** Airplane mode on a LowEnd_A9 emulator:
+the fetch failed with `UnknownHostException`, the cached values applied, and the
+app carried on — including honouring a cached `min_version` that the network
+could no longer confirm. The live config file still carries no `min_version` key
+at all, and the app read it as `0`, so an old config against a new app fails open
+by observation rather than by argument.
 
 | Trigger | Unhandled | Should happen | Fix |
 |---|---|---|---|
@@ -238,7 +247,14 @@ that is not theirs, and a note that says "hospital".
 | Widget placed, then "delete everything" | Widget shows a rota that no longer exists | Falls back to *"Tap to set up your rota"*, and stays tappable — the refresh rides on the same `onRotaChanged` that rebuilds the alarms, so it happens as the dialog closes rather than at the next update tick | **Done** — Phase 14, observed on a vivo V2307. The alarm window is emptied at the same moment: `clearWindow` runs before the no-rota early return, and `dumpsys alarm` showed nothing pending afterwards |
 | Two widgets on the home screen | One updates, one does not | Both are updated; the app and widget share one repository instance because two database handles on one file go blind to each other's writes | None |
 | Day rolls over at midnight | Yesterday's shift on the home screen until the app is opened | The daily job refreshes it | None |
-| Launcher never renders the picker preview | Widget looks broken before it is placed | **Known, unresolved.** The placed widget works; the picker thumbnail does not render on Funtouch or Pixel launchers despite three different configurations | Open — parked |
+| Launcher never renders the picker preview | Widget looks broken before it is placed | The preview draws a plausible week | **Fixed.** `widget_preview.xml` drew its seven day blocks with plain `<View>`. A widget layout is inflated as RemoteViews, which permits only a fixed list of classes, and `android.view.View` is not on it — so the inflater threw `Class not allowed to be inflated android.view.View` and the launcher drew a grey rectangle reading *"couldn't add widget"* in its place. `<ImageView>` is on the list and takes the same `background`. Nothing about the widget was ever wrong; only this file |
+
+**The parked row above is closed, and the way it was found is the lesson.** It
+had been looked at three times and written off as a launcher quirk, on the
+evidence that two different launchers both failed. Both were right: every
+launcher fails, because the layout is invalid for every launcher. Nobody had
+read `logcat` while the picker was open, and the exception names the file, the
+line and the class.
 
 ## 14. Interop and sharing
 

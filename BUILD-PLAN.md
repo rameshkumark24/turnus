@@ -104,8 +104,9 @@ rollover.
 DONE WHEN: The widget agrees with the app, and updates after an edit.
 DEPENDS ON: 2
 PLAN MODE: no
-NOTE: The **picker thumbnail does not render** on Funtouch or Pixel launchers
-despite three configurations tried. The placed widget works. Parked — §13.
+NOTE: The picker thumbnail did not render on Funtouch or Pixel launchers
+despite three configurations tried. **Fixed in the store-submission pass** —
+`widget_preview.xml` used `<View>`, which RemoteViews does not permit. See §13.
 
 ## Phase 8 — Adverts and consent
 STATUS: DONE
@@ -436,7 +437,10 @@ V2307) and an emulator.
 ## What is not built
 
 - Phases 12–17 above.
-- The widget **picker thumbnail** does not render (parked, `EDGE-CASES.md` §13).
+- ~~The widget **picker thumbnail** does not render~~ — **fixed**, root cause in
+  `EDGE-CASES.md` §13. It had been written off three times as a launcher quirk on
+  the evidence that two launchers both failed. Every launcher fails; the layout
+  was invalid for all of them, and one line of `logcat` named the file and line.
 - The **feature graphic** (1024x500) has not been made. The listing cannot go
   up without it.
 

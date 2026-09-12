@@ -6,6 +6,20 @@
   cannot read anyone's rota. It is a plausible week rather than real data —
   the alternative is the launcher showing a bare app icon, which reads as an
   unfinished widget and is a reason not to add it.
+
+  ImageView for the blocks, not View, and that is the whole of the "picker
+  preview does not render" bug that sat open for weeks. A widget layout is
+  inflated as RemoteViews, which permits only a fixed list of classes, and
+  plain android.view.View is not on it — so the inflater threw
+  "Class not allowed to be inflated android.view.View" and the launcher drew
+  a grey rectangle reading "couldn't add widget" in its place. Nothing about
+  the widget itself was wrong; only this file, and only because a bare View
+  is the obvious way to draw a coloured rectangle everywhere except here.
+
+  Anything added to this file has to come from that list: FrameLayout,
+  LinearLayout, RelativeLayout, GridLayout, TextView, ImageView, Button,
+  ImageButton, ProgressBar, Chronometer, AnalogClock, ViewFlipper and the
+  adapter views. Nothing else, and no custom subclass of any of them.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -35,25 +49,39 @@
         android:layout_marginTop="12dp"
         android:orientation="horizontal">
 
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_on" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_off" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_off" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_off" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_off" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1" android:layout_marginEnd="3dp"
             android:background="@drawable/preview_block_on" />
-        <View android:layout_width="0dp" android:layout_height="match_parent"
+        <ImageView
+            android:importantForAccessibility="no"
+            android:layout_width="0dp" android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@drawable/preview_block_on" />
     </LinearLayout>
