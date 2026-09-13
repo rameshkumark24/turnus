@@ -42,9 +42,9 @@ android {
         // Increases on every upload, and never repeats — Play rejects a code it
         // has seen, including from a bundle that was deleted.
         versionCode = 2
-        // 1.0.1: the first fix from the closed test — the rest-day headline read
-        // "Back in Tuesday". 1.0.0 was the first upload, as a release candidate
-        // rather than a preview.
+        // 1.0.1: fixes found by running the signed 1.0.0 build before the closed
+        // test began, not reported by testers. 1.0.0 was the first upload, as a
+        // release candidate rather than a preview.
         versionName = "1.0.1"
     }
 

@@ -322,7 +322,8 @@ asset a browsing user judges before reading a word of the listing.
 STATUS: **IN REVIEW** — Play accepted the signed bundle, and the first closed-testing
 release was submitted on 13 Sep 2026. Not DONE until it installs from Play on the
 vivo, which waits on the review.
-GOAL: A signed bundle uploaded to internal testing.
+GOAL: A signed bundle in a closed test on Play. Internal testing does not count
+toward production access for a new personal account.
 BUILD: Real AdMob IDs in `local.properties`; a real upload keystore; privacy
 policy placeholders filled and hosted; Data Safety form completed from
 `docs/DATA_SAFETY.md`; trader status; final full test pass; `bundleRelease`.
@@ -403,20 +404,42 @@ FOUND AND FIXED, IN 1.0.1 (versionCode 2 — built, not uploaded):
 
 - **The rest-day headline read "Back in Tuesday"**, on the calendar and on the
   widget. The phrase is always a point in time, never a duration. Now *"Back on
-  Tuesday"* / *"Back tomorrow"*, held by `ChangeHeadlineTest`. None of the eight
-  listing screenshots show the old wording.
-- **The day sheet's shift chips were a fixed 52dp**, so at the largest font the
-  shift name under each letter was cut to a 16–26px sliver. The row now sizes to
-  its tallest chip.
+  Tuesday"* / *"Back tomorrow"*. The sentence had been written twice, once per
+  screen, and neither copy was tested — which is how both went wrong together —
+  so it now lives once, as `Outlook.changeHeadline` in `:engine`, held by
+  property tests, and both screens call it. None of the eight listing
+  screenshots show the old wording.
+- **The widget kept yesterday's wording after midnight.** Nothing redrew it when
+  the date changed — only leaving the app, a reboot, and the daily worker at an
+  hour of WorkManager's choosing — so "Back tomorrow" was still on the home screen
+  the next day for exactly the person who never opens the app. `DateRollover`
+  sets one non-wake-up alarm for just after local midnight on every draw.
+- **The day sheet at the largest font.** Its shift chips were a fixed 52dp, which
+  cut each shift name to a 16–26px sliver; the row now sizes to its tallest chip.
+  Two things that change made worse were fixed with it: the sheet did not scroll,
+  so a taller row could push "Save note" and "Put back to" off the bottom, and
+  every working shift type shared one row, so seven of them became chips a
+  letter wide. The sheet scrolls, and chips wrap four to a row, three at a large
+  font.
+- **Settings said "Open it in Google Calendar".** On the vivo, with Google Calendar
+  installed, Calendar accepts a `.ics` neither from the share sheet nor as a file
+  to open. The card now says to import it at calendar.google.com.
+- **GitHub Pages was publishing `docs/play/` and `docs/screenshots/`.** Both are now
+  excluded, which takes effect on the next push.
 
 STILL OPEN:
 
 - **`app-ads.txt` is not hosted.** AdMob reads it from the root of the developer
   website; `rameshkumark24.github.io/app-ads.txt` is a 404, and a project page
   under `/turnus/` cannot serve it. The line is in `docs/play/app-ads.txt`.
-- **Settings says "Open it in Google Calendar"**, but Calendar is not offered in
-  the share sheet on the emulator, and its Android app may not import a whole
-  `.ics`. Check on a real phone before deciding whether the copy changes.
+- **Two widget refreshes within about 45 seconds can draw the earlier rota.**
+  Glance keeps a widget session open briefly after a draw; an update inside it
+  recomposes without calling `provideGlance`, which is the only place the rota is
+  read. Found while verifying the midnight redraw — a redraw sent seconds after
+  another did not reach `provideGlance`, the same redraw 90 seconds later did.
+  The stale drawing itself was not reproduced. The fix is to read the rota inside
+  the composition rather than before it, which is a change to how the widget
+  loads, not a line, so it is left for a decision.
 
 ## Phase 17 — Multiple rotas *(v1.1, not v1)*
 STATUS: NOT STARTED

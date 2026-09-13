@@ -1,5 +1,8 @@
 package com.turnus.rota.engine
 
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
 /**
  * "Am I in today, and when does that change?"
  *
@@ -16,6 +19,47 @@ package com.turnus.rota.engine
  * window is resolved through [ShiftEngine], overrides included.
  */
 object Outlook {
+
+    /**
+     * The sentence that says when the current run ends: "Off from Thursday",
+     * "Back on Thursday", "Back tomorrow".
+     *
+     * It lives here rather than in either screen because it is said in two
+     * places, the calendar's next-change card and the home-screen widget, and it
+     * used to be written in both. Neither copy was tested and both said "Back in
+     * Tuesday" on every rest day — the phrase is always a point in time, never a
+     * duration. One function, held by property tests, is what keeps the two
+     * screens saying the same thing.
+     *
+     * Inside the coming week a weekday name is unambiguous and reads faster than
+     * a date. Beyond it, "Thursday" could be any of several, so the date is used.
+     *
+     * [daysAway] below 1 cannot come out of [summarise], and is read as tomorrow
+     * rather than thrown: a wrong-ish sentence on a widget is a far smaller
+     * failure than a crash drawing one. [locale] is a parameter rather than the
+     * JVM default so this stays a pure function.
+     */
+    fun changeHeadline(
+        nowWorking: Boolean,
+        daysAway: Int,
+        nextStart: DayNumber,
+        locale: Locale,
+    ): String {
+        val away = daysAway.coerceAtLeast(1)
+        val day = when {
+            away == 1 -> "tomorrow"
+            away <= 6 -> nextStart.toLocalDate().format(WEEKDAY.withLocale(locale))
+            else -> nextStart.toLocalDate().format(SHORT_DATE.withLocale(locale))
+        }
+        return when {
+            nowWorking -> "Off from $day"
+            away == 1 -> "Back tomorrow"
+            else -> "Back on $day"
+        }
+    }
+
+    private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE")
+    private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 
     /**
      * An unbroken run of days that are either all working or all off.

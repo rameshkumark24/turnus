@@ -33,7 +33,6 @@ import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
 import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ShiftEngine
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
@@ -55,6 +54,9 @@ class RotaWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Every draw sets the next midnight redraw, so the chain cannot lapse
+        // while a widget is on the home screen.
+        DateRollover.schedule(context)
         val snapshot = load(context)
         provideContent {
             Content(snapshot, WidgetPalette.of(context))
@@ -124,22 +126,15 @@ private fun headlineFor(
 private fun detailFor(outlook: Outlook.Summary, styles: Map<String, ShiftStyle>): String? {
     val next = outlook.next ?: return null
     val away = outlook.daysUntilNext ?: return null
-    // A point in time, never a duration: "Back on Tuesday", not "Back in
-    // Tuesday". Mirrors changeHeadline in the app's month screen, which is
-    // tested; the two must read the same.
-    val day = if (away <= 6) {
-        next.start.toLocalDate().format(WEEKDAY)
-    } else {
-        next.start.toLocalDate().format(SHORT_DATE)
-    }
-    return if (outlook.current.isWorking) {
-        if (away == 1) "Off from tomorrow" else "Off from $day"
-    } else {
-        val back = if (away == 1) "Back tomorrow" else "Back on $day"
-        val name = next.shiftTypeId?.takeUnless { next.mixed }?.let { styles[it]?.name }
-        if (name != null) "$back · $name" else back
-    }
+    // The same sentence as the calendar's next-change card, from the one
+    // tested function in :engine, so the two cannot drift apart again.
+    val headline = Outlook.changeHeadline(
+        nowWorking = outlook.current.isWorking,
+        daysAway = away,
+        nextStart = next.start,
+        locale = Locale.getDefault(Locale.Category.FORMAT),
+    )
+    if (outlook.current.isWorking) return headline
+    val name = next.shiftTypeId?.takeUnless { next.mixed }?.let { styles[it]?.name }
+    return if (name != null) "$headline · $name" else headline
 }
-
-private val WEEKDAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE")
-private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM")

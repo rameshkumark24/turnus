@@ -3,7 +3,8 @@
   updatePeriodMillis is deliberately 0. The system caps it at half an hour and
   wakes the device to honour it, which for a calendar that changes at midnight
   is a lot of battery for nothing. The app, the daily worker and the boot
-  receiver push updates instead, at the moments the content actually changes.
+  receiver push updates instead, at the moments the content actually changes,
+  and DateRollover sets one non-wake-up alarm for just after midnight.
 
   initialLayout is our own placeholder rather than Glance's default loading
   layout. Several launchers — Funtouch among them — render initialLayout as the

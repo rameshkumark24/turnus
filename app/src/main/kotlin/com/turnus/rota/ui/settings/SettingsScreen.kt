@@ -458,9 +458,15 @@ fun SettingsScreen(
             Card {
                 Text("Send your rota to a calendar", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(2.dp))
+                // It used to say "Open it in Google Calendar". Google Calendar's
+                // Android app accepts a shared .ics neither by share nor by open
+                // — checked on a vivo V2307 with Calendar installed — so that
+                // sent people looking for an option that is not there. Importing
+                // a whole file is a Google Calendar web feature.
                 Text(
-                    "A calendar file covering the next year. Open it in Google " +
-                        "Calendar, or send it to whoever needs to know when you work.",
+                    "A calendar file covering the next year, to send to whoever needs " +
+                        "to know when you work. To add it to Google Calendar, email it " +
+                        "to yourself and import it on a computer at calendar.google.com.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

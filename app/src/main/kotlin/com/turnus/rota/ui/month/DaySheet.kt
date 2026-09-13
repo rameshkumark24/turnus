@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -29,10 +31,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.ui.theme.TurnusTokens
@@ -73,6 +77,11 @@ fun DaySheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                // Scrolls because it can outgrow the sheet. At the largest font,
+                // on a short screen or with several shift types, the note field
+                // and "Put back to" ran past the bottom edge, and a
+                // ModalBottomSheet clips its content rather than scrolling it.
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp),
@@ -102,30 +111,33 @@ fun DaySheet(
             )
             Spacer(Modifier.height(8.dp))
 
-            // Sized to its tallest chip rather than a fixed 52dp. At the largest
-            // system font the letter alone filled the fixed height and the shift
-            // name under it was cut to a sliver — the day editor is one of the
-            // screens promised to scale without limit (see GridFontScaleCap).
-            // IntrinsicSize.Min plus fillMaxHeight keeps the four chips level
-            // when one name wraps.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
-                modifier = Modifier.height(IntrinsicSize.Min),
-            ) {
-                styles.values
-                    .filter { it.isWorking }
-                    .sortedBy { it.code }
-                    .forEach { style ->
-                        ShiftOption(
-                            style = style,
-                            selected = sheet.effective == style.id,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .heightIn(min = 52.dp)
-                                .clickable { onChoose(style.id) },
-                        )
+            // Up to four chips a row, three at a large font, wrapping onto more
+            // rows. One row of equal weights squeezed seven shift types into
+            // chips a letter wide. Each row is as tall as its tallest chip —
+            // the day editor scales without limit (see GridFontScaleCap) — and
+            // a short last row keeps its chips the width of the rows above.
+            val working = styles.values.filter { it.isWorking }.sortedBy { it.code }
+            val perRow = minOf(working.size, if (LocalDensity.current.fontScale > 1.3f) 3 else 4)
+            Column(verticalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap)) {
+                working.chunked(perRow.coerceAtLeast(1)).forEach { rowStyles ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
+                        modifier = Modifier.height(IntrinsicSize.Min),
+                    ) {
+                        rowStyles.forEach { style ->
+                            ShiftOption(
+                                style = style,
+                                selected = sheet.effective == style.id,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .heightIn(min = 52.dp)
+                                    .clickable { onChoose(style.id) },
+                            )
+                        }
+                        repeat(perRow - rowStyles.size) { Spacer(Modifier.weight(1f)) }
                     }
+                }
             }
 
             Spacer(Modifier.height(10.dp))
@@ -217,6 +229,9 @@ private fun ShiftOption(
                 style = MaterialTheme.typography.labelSmall,
                 color = foreground.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
+                // The chip's content description carries the full name.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
