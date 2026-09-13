@@ -6,10 +6,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +32,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.ui.theme.TurnusTokens
@@ -98,7 +102,16 @@ fun DaySheet(
             )
             Spacer(Modifier.height(8.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap)) {
+            // Sized to its tallest chip rather than a fixed 52dp. At the largest
+            // system font the letter alone filled the fixed height and the shift
+            // name under it was cut to a sliver — the day editor is one of the
+            // screens promised to scale without limit (see GridFontScaleCap).
+            // IntrinsicSize.Min plus fillMaxHeight keeps the four chips level
+            // when one name wraps.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(TurnusTokens.CellGap),
+                modifier = Modifier.height(IntrinsicSize.Min),
+            ) {
                 styles.values
                     .filter { it.isWorking }
                     .sortedBy { it.code }
@@ -108,7 +121,8 @@ fun DaySheet(
                             selected = sheet.effective == style.id,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp)
+                                .fillMaxHeight()
+                                .heightIn(min = 52.dp)
                                 .clickable { onChoose(style.id) },
                         )
                     }
@@ -188,7 +202,10 @@ private fun ShiftOption(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp),
+        ) {
             Text(
                 text = style.code,
                 style = MaterialTheme.typography.titleMedium,
@@ -199,6 +216,7 @@ private fun ShiftOption(
                 text = style.name,
                 style = MaterialTheme.typography.labelSmall,
                 color = foreground.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center,
             )
         }
     }

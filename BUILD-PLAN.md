@@ -319,8 +319,9 @@ release. Contact email and EU trader status are undecided. The icon is done
 asset a browsing user judges before reading a word of the listing.
 
 ## Phase 16 — Release candidate
-STATUS: **BLOCKED ON YOU** — the code side is done and proven; the upload is not
-mine to do.
+STATUS: **IN REVIEW** — Play accepted the signed bundle, and the first closed-testing
+release was submitted on 13 Sep 2026. Not DONE until it installs from Play on the
+vivo, which waits on the review.
 GOAL: A signed bundle uploaded to internal testing.
 BUILD: Real AdMob IDs in `local.properties`; a real upload keystore; privacy
 policy placeholders filled and hosted; Data Safety form completed from
@@ -374,6 +375,48 @@ NOT DONE, AND WHY:
 - **A test-signed build must be uninstalled before installing from Play** — the
   signatures differ and the upgrade is refused. The one used for this smoke test
   has already been removed from the vivo, and its key destroyed.
+
+CHECKED ON 13 SEP 2026 — the release build, on the emulator (API 36.1). The vivo
+was locked at 13% battery, so none of this is from an OEM phone:
+
+- **"Remind me" on the calendar scheduled 15 exact alarms**, one per working day,
+  an hour before the start. An earlier count of 20 that looked like proof of the
+  boot receiver belonged to the debug build installed alongside, so alarms are
+  now counted by package, never by tag alone.
+- **Editing a shift moves its reminders** — when the app is left
+  (`onStop` → `syncReminders`), which is the design, not after each edit.
+- **A reminder fired** at 12:45:12, *"Day · Starts at 13:00 today"*. Tapped with
+  the app in the background and the grid on November, it opened September with
+  today ringed, and cleared itself.
+- **Backup** wrote 1,867 bytes of valid JSON, with the rota start stored as a day
+  number. **Restore** reverted a changed warning, and offered undo.
+- **Calendar export** generated the file and opened the share sheet. Its contents
+  were not opened on a device; `IcsWriterTest` covers them.
+- **The widget picker preview renders** on the Pixel launcher — the RemoteViews
+  fix, finally seen on a launcher rather than inferred from logcat.
+- **`FLAG_SECURE` holds on the day sheet**: a capture of it is black.
+- **Reminders survive a reboot**: 15 alarms before, 0 at boot, 15 again 31
+  seconds later, with the process started for `BootReceiver` and the app never
+  opened.
+
+FOUND AND FIXED, IN 1.0.1 (versionCode 2 — built, not uploaded):
+
+- **The rest-day headline read "Back in Tuesday"**, on the calendar and on the
+  widget. The phrase is always a point in time, never a duration. Now *"Back on
+  Tuesday"* / *"Back tomorrow"*, held by `ChangeHeadlineTest`. None of the eight
+  listing screenshots show the old wording.
+- **The day sheet's shift chips were a fixed 52dp**, so at the largest font the
+  shift name under each letter was cut to a 16–26px sliver. The row now sizes to
+  its tallest chip.
+
+STILL OPEN:
+
+- **`app-ads.txt` is not hosted.** AdMob reads it from the root of the developer
+  website; `rameshkumark24.github.io/app-ads.txt` is a 404, and a project page
+  under `/turnus/` cannot serve it. The line is in `docs/play/app-ads.txt`.
+- **Settings says "Open it in Google Calendar"**, but Calendar is not offered in
+  the share sheet on the emulator, and its Android app may not import a whole
+  `.ics`. Check on a real phone before deciding whether the copy changes.
 
 ## Phase 17 — Multiple rotas *(v1.1, not v1)*
 STATUS: NOT STARTED
@@ -634,16 +677,17 @@ access · the decision in Phase 15 about naming a profession.
 
 ## Next
 
-**Yours, not mine.** The code is a release candidate: a minified 1.0.0 build was
-run end to end on the vivo with no crashes, and the bundle now refuses to build
-with test ad units. What is left cannot be done from here, in the order
-`docs/RELEASING.md` §6 sets out:
+**Yours, not mine.** Play accepted the bundle and the first closed-testing release
+is in review. Nothing left before production is code; it is Google's queue and
+the testing requirement for a new personal account:
 
-1. An upload keystore, and real AdMob ids in `local.properties`.
-2. The privacy policy hosted somewhere that resolves — **this blocks release**.
-3. The Data Safety form from `docs/DATA_SAFETY.md`, trader status, contact email.
-4. Screenshots and a feature graphic from the brief in `docs/STORE-LISTING.md`.
-5. `bundleRelease`, upload to **internal testing**, install from Play on the vivo.
+1. Play's review of the closed-testing release.
+2. **At least 12 testers opted in.** The 14-day clock does not start before the
+   twelfth — the Dashboard counter reading 0 means the clock reads 0 too.
+3. **14 continuous days** with 12 or more still opted in. Dropping below 12 is
+   the one way to lose days already served.
+4. Apply for production access from the Dashboard, and wait for that review.
+5. Production, as a **staged** rollout — never 100% on day one.
 
 **Phase 17 (multiple rotas) is v1.1 and deliberately after the release.**
 

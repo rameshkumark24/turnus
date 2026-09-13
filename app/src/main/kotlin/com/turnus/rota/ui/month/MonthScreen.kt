@@ -67,6 +67,7 @@ import com.turnus.rota.engine.Outlook
 import com.turnus.rota.engine.ResolvedDay
 import com.turnus.rota.ui.SecureWhileVisible
 import com.turnus.rota.ui.theme.TurnusTokens
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
@@ -809,13 +810,6 @@ private fun outlookCopy(
     }
 
     val target = next.start.toLocalDate()
-    val whenPhrase = when {
-        daysAway == 1 -> "tomorrow"
-        // Inside the coming week a weekday name is unambiguous and reads faster
-        // than a date. Beyond it, "Thursday" could be any of several.
-        daysAway <= 6 -> target.format(WEEKDAY)
-        else -> target.format(SHORT_DATE)
-    }
 
     val detail = buildList {
         if (current.isWorking) {
@@ -836,12 +830,33 @@ private fun outlookCopy(
     }
 
     return OutlookCopy(
-        headline = if (current.isWorking) "Off from $whenPhrase" else "Back in $whenPhrase",
+        headline = changeHeadline(current.isWorking, daysAway, target),
         detail = detail.joinToString(" · ").ifBlank { null },
     )
 }
 
 private fun days(count: Int): String = if (count == 1) "1 day" else "$count days"
+
+/**
+ * "Off from Thursday" or "Back on Thursday".
+ *
+ * The phrase is a point in time — tomorrow, a weekday, a date — and never a
+ * duration, so the preposition has to agree with that. It used to read
+ * "Back in Tuesday" on every rest day, on the calendar and on the home-screen
+ * widget, which is the one line of text a person sees most often. The widget
+ * builds the same sentence in its own module and must say the same thing.
+ */
+internal fun changeHeadline(nowWorking: Boolean, daysAway: Int, target: LocalDate): String {
+    // Inside the coming week a weekday name is unambiguous and reads faster
+    // than a date. Beyond it, "Thursday" could be any of several.
+    val day = if (daysAway <= 6) target.format(WEEKDAY) else target.format(SHORT_DATE)
+    return when {
+        nowWorking && daysAway == 1 -> "Off from tomorrow"
+        nowWorking -> "Off from $day"
+        daysAway == 1 -> "Back tomorrow"
+        else -> "Back on $day"
+    }
+}
 
 private const val COLUMNS = 7
 

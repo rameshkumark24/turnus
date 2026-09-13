@@ -294,8 +294,8 @@ line and the class.
 ## What must be handled before v1
 
 1. ~~**Surface reminders after setup**~~ — done, Phase 12.
-2. **Explain force-stop and battery management** in the store listing, not only in Settings.
-   *Still open — this is copy, and it belongs to Phase 15.*
+2. ~~**Explain force-stop and battery management** in the store listing~~ — done,
+   Phase 15. The full description carries *IF REMINDERS STOP ARRIVING*.
 3. ~~**Tolerate mangled share codes**~~ — done, Phase 13.
 4. ~~**Distinguish "could not read" from "not a backup"**~~ — done, Phase 13.
 5. ~~**Route notification taps to the month view**~~ — done, Phase 13. The tap now
@@ -303,7 +303,7 @@ line and the class.
    defect wearing a different screen.
 6. ~~**Add the `id` tiebreaker to shift ordering**~~ — done, Phase 13.
 
-**Only item 2 is left, and it is writing rather than code.**
+**Nothing on this list is left.**
 
 ## What is deliberately accepted for v1
 
@@ -312,4 +312,3 @@ line and the class.
 - Process death mid-wizard loses a hand-built cycle.
 - No app lock — the device lock is the security boundary.
 - No moderation of shared rota names — it implies a server we have promised not to have.
-- The widget picker thumbnail does not render.

@@ -41,11 +41,11 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Increases on every upload, and never repeats — Play rejects a code it
         // has seen, including from a bundle that was deleted.
-        versionCode = 1
-        // 1.0.0 rather than 0.1.0: this goes to internal testing as a release
-        // candidate, not as a preview. There is no feature here waiting to
-        // arrive before the app is worth its first whole number.
-        versionName = "1.0.0"
+        versionCode = 2
+        // 1.0.1: the first fix from the closed test — the rest-day headline read
+        // "Back in Tuesday". 1.0.0 was the first upload, as a release candidate
+        // rather than a preview.
+        versionName = "1.0.1"
     }
 
     buildFeatures {

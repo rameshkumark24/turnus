@@ -124,16 +124,20 @@ private fun headlineFor(
 private fun detailFor(outlook: Outlook.Summary, styles: Map<String, ShiftStyle>): String? {
     val next = outlook.next ?: return null
     val away = outlook.daysUntilNext ?: return null
-    val whenPhrase = when {
-        away == 1 -> "tomorrow"
-        away <= 6 -> next.start.toLocalDate().format(WEEKDAY)
-        else -> next.start.toLocalDate().format(SHORT_DATE)
+    // A point in time, never a duration: "Back on Tuesday", not "Back in
+    // Tuesday". Mirrors changeHeadline in the app's month screen, which is
+    // tested; the two must read the same.
+    val day = if (away <= 6) {
+        next.start.toLocalDate().format(WEEKDAY)
+    } else {
+        next.start.toLocalDate().format(SHORT_DATE)
     }
     return if (outlook.current.isWorking) {
-        "Off from $whenPhrase"
+        if (away == 1) "Off from tomorrow" else "Off from $day"
     } else {
+        val back = if (away == 1) "Back tomorrow" else "Back on $day"
         val name = next.shiftTypeId?.takeUnless { next.mixed }?.let { styles[it]?.name }
-        if (name != null) "Back in $whenPhrase · $name" else "Back in $whenPhrase"
+        if (name != null) "$back · $name" else back
     }
 }
 

@@ -160,8 +160,12 @@ waste time on.
    bundle you deleted.
 6. `./gradlew :app:bundleRelease` — refuses without real ad ids, and is unsigned
    without a key.
-7. Upload to **internal testing**, not production. Install from Play on a real
-   phone before promoting anything.
+7. Upload to **closed testing**, not production. A personal developer account
+   created after 13 November 2023 cannot apply for production until a closed
+   test has had **at least 12 testers opted in for 14 continuous days**, and
+   internal testing does not count toward it — the Console says so on the
+   Dashboard, and it is the step that sets the launch date. Install from Play on
+   a real phone before promoting anything.
 8. Fill the Data Safety form from `docs/DATA_SAFETY.md` and check the privacy
    policy URL actually resolves. A policy that 404s is a rejection.
 
