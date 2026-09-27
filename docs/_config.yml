@@ -12,4 +12,5 @@ exclude:
   - RELEASING.md
   - DATA_SAFETY.md
   - STORE-LISTING.md
+  - INSTAGRAM.md
   - check-listing.sh
