@@ -12,6 +12,7 @@ exclude:
   - RELEASING.md
   - DATA_SAFETY.md
   - STORE-LISTING.md
+  - INSTAGRAM.md
   - check-listing.sh
   # Store assets and the scripts that render them. They were being published
   # at /turnus/play/ and /turnus/screenshots/ because nothing excluded them.
