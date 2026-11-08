@@ -1,9 +1,5 @@
 package com.turnus.rota.ui
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -11,6 +7,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.DialogProperties
+import com.turnus.rota.share.PlayListing
 
 /**
  * The one thing this app can say to a phone it has already shipped to.
@@ -56,45 +53,11 @@ fun UpdateRequiredDialog() {
             )
         },
         confirmButton = {
-            TextButton(onClick = { openStoreListing(context) }) {
+            // If nothing can open the listing the dialog simply stays up, which
+            // is the correct outcome: the build is still the blocked one.
+            TextButton(onClick = { PlayListing.open(context) }) {
                 Text("Update now")
             }
         },
     )
 }
-
-/**
- * Opens the Play listing, preferring the installed Play app.
- *
- * `market://` goes straight there; the https address is the fallback for a
- * device with no Play app, which on this app's audience is rare but real —
- * plenty of cheap handsets are sold with a vendor store instead.
- */
-private fun openStoreListing(context: Context) {
-    val attempts = listOf(
-        Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$PLAY_PACKAGE")),
-        Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://play.google.com/store/apps/details?id=$PLAY_PACKAGE"),
-        ),
-    )
-    for (intent in attempts) {
-        try {
-            context.startActivity(intent)
-            return
-        } catch (missing: ActivityNotFoundException) {
-            // Try the next one. If both fail the dialog simply stays up, which
-            // is the correct outcome: the build is still the blocked one.
-            continue
-        }
-    }
-}
-
-/**
- * The published application id, not `BuildConfig.APPLICATION_ID`.
- *
- * A debug build carries a `.debug` suffix so it can sit beside a Play install,
- * and that id has no Play listing — using it here would send anyone testing
- * this dialog to a 404.
- */
-private const val PLAY_PACKAGE = "com.turnus.rota"

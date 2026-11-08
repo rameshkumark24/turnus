@@ -5,8 +5,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.updateAll
+import androidx.glance.appwidget.state.updateAppWidgetState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * The manifest entry point for the widget.
@@ -17,7 +22,7 @@ import androidx.glance.appwidget.updateAll
  * corrected their rota, which is exactly the moment they are checking it.
  *
  * The one update nobody else triggers is the date changing, which
- * [DateRollover] asks for and this receiver turns into an ordinary redraw.
+ * [DateRollover] asks for and this receiver turns into an ordinary [refresh].
  */
 class RotaWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = RotaWidget()
@@ -27,22 +32,22 @@ class RotaWidgetReceiver : GlanceAppWidgetReceiver() {
             super.onReceive(context, intent)
             return
         }
-        // Handed to Glance as the standard update broadcast, so its own async
-        // handling does the drawing, with the widget ids read now rather than
-        // when the alarm was set. Harmless if anything else sends it: the only
-        // effect is a redraw.
-        val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, RotaWidgetReceiver::class.java))
-        if (ids.isEmpty()) {
+        if (placedIds(context).isEmpty()) {
             DateRollover.cancel(context)
             return
         }
-        super.onReceive(
-            context,
-            Intent(intent)
-                .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids),
-        )
+        // Through refresh rather than a plain update broadcast: a new date is
+        // new data, and a widget session still open from a draw a few seconds
+        // before midnight would otherwise redraw yesterday. Harmless if
+        // anything else sends this action: the only effect is a redraw.
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            try {
+                refresh(context)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
     /** The last widget is gone, so nothing needs redrawing at midnight. */
@@ -52,8 +57,39 @@ class RotaWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 
     companion object {
+        /**
+         * Redraws every placed widget from a fresh read of the rota.
+         *
+         * The widgets come from Android's own list, not Glance's `updateAll`.
+         * Glance finds a widget class's instances through a table keyed by
+         * that class's name, written by this receiver when the system sends
+         * it an update. R8 renames [RotaWidget] differently in each release,
+         * so after an app update the table names a class that no longer
+         * exists, and `updateAll` finds nothing until the system next sends
+         * an update — which, with `updatePeriodMillis` at 0, may be never.
+         * Meanwhile the launcher shows the placeholder layout, a made-up week.
+         * Seen on the emulator: 1.0.2 installed over 1.0.1 left the widget on
+         * that placeholder through the update's own refresh and two edits.
+         *
+         * Bumping [GENERATION] before each update is what makes "fresh" true
+         * for a widget whose Glance session is still open: the update reloads
+         * its state, and the new number makes it read the rota again.
+         */
         suspend fun refresh(context: Context) {
-            RotaWidget().updateAll(context)
+            val glance = GlanceAppWidgetManager(context)
+            val widget = RotaWidget()
+            for (appWidgetId in placedIds(context)) {
+                val id = glance.getGlanceIdBy(appWidgetId)
+                updateAppWidgetState(context, id) { state ->
+                    state[GENERATION] = (state[GENERATION] ?: 0L) + 1
+                }
+                widget.update(context, id)
+            }
         }
+
+        /** The widgets on the home screen right now, as the launcher knows them. */
+        private fun placedIds(context: Context): IntArray =
+            AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(ComponentName(context, RotaWidgetReceiver::class.java))
     }
 }

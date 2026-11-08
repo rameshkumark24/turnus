@@ -33,15 +33,20 @@ Turnus: Shift Work Calendar
 real word to some of the audience and a short, ownable, unclaimed one to the
 rest. The generic phrase after the colon is the search term.
 
-## 2. Short description — 73 / 80 characters
+## 2. Short description — 76 / 80 characters
 
 ```
-Your rota, offline. Reminders before every shift. Nothing is ever locked.
+Shift calendar & rota planner: reminders before every shift, nothing locked.
 ```
 
-Three claims, in the order they matter: it works without a signal, it tells you
-before a shift, and it costs nothing. The last is the differentiator and takes
-the emphatic position.
+Changed in November 2026, four weeks after launch. The launch text was *"Your
+rota, offline. Reminders before every shift. Nothing is ever locked."* It made
+the right claims and contained almost none of the words people type into Play
+search: no "calendar", no "schedule", no "planner". Play indexes this field
+heavily, and a new app with no installs or ratings is found through search or
+not at all. The new text leads with the search phrase and keeps the two claims
+that matter, the reminder and the differentiator. "Offline" moved to the full
+description, which already says it.
 
 ## 3. Full description — 3,278 / 4,000 characters
 
@@ -160,6 +165,16 @@ cropped and often behind a play button.
 
 Play shows the first two or three without scrolling, so the argument is made by
 then. Every caption below is an overlay, not part of the app.
+
+**The captions in this table were never applied, and two of them cannot be.**
+The listing launched with the raw captures. In November 2026 the captioned set
+was rendered into `docs/play/screenshots/` by `docs/play/render-screenshots.py`,
+with different captions: Google's preview-asset guidelines rule out "price and
+promotional information" in screenshots and list "Free" by name for store
+graphics, so #1 and #2 below would put a listing update at risk of rejection.
+The rendered captions describe what each screen does; the script holds the
+list and the reasons. The "nothing is locked" claim stays in the text fields,
+where it is allowed.
 
 | # | Screen | Overlay caption | Why it is here |
 |---|---|---|---|

@@ -698,19 +698,50 @@ access · the decision in Phase 15 about naming a profession.
   battery behaviour in `EDGE-CASES.md` §11 is exactly what an emulator cannot
   show. Worth one run on the vivo before release.
 
+## Released
+
+1.0.1 went to production on 12 October 2026, to every country, after a closed
+test of 12 testers for 14 days. The first release had no rollout percentage:
+Play only allows staged rollouts for updates.
+
+## 1.0.2 — growth, and two widget bugs
+STATUS: BUILT AND VERIFIED, NOT UPLOADED
+WHY: Four weeks after launch the listing showed single-digit installs. Looking
+for why turned up two leaks that were in the product rather than the marketing:
+- **A shared rota code could not recruit anyone.** The message told the
+  receiver to open Turnus and gave them no way to get it. It now ends with a
+  Play link, tagged `utm_campaign=rota-code` so Play Console can say whether the
+  crew loop brings anyone in. That is the only measurement this app has, and it
+  needs no SDK.
+- **The store screenshots had no captions.** The captions planned in
+  `docs/STORE-LISTING.md` §5 were never applied, and two of them are not allowed
+  by Play's preview-asset rules. Rendered with permitted captions.
+BUILD:
+- Share message ends with an install link (`PlayListing`, shared with the
+  update dialog, which used to own a private copy of the same code).
+- A one-time "Same rota as your crew?" card on the calendar, never in the same
+  visit as the reminder card.
+- "Help others find Turnus" in Settings: *Rate Turnus* opens the listing,
+  *Tell someone* shares a tagged link. No rating pop-up, and no in-app review
+  library, which would be a new dependency.
+- Widget: two refreshes close together now draw the second rota, and an app
+  update no longer leaves the sample week on screen. Both in `EDGE-CASES.md`.
+VERIFIED: On the emulator, signed release builds. Both widget bugs reproduced
+on the old code and gone on the new. The share sheet showed the full message,
+and that message copied from it and pasted into *I have a code* opened *"Use
+this rota? 4 on, 4 off"*. The crew card showed for a user whose reminder
+question was already answered, and was gone after sending. *Rate Turnus*
+opened the Play Store; *Tell someone* showed its message. 170 JVM tests pass.
+NOT VERIFIED: the crew card's "not in the same visit as the reminder card"
+rule on a device. It needs a fresh install to reach, and is held by the flow
+read once in `MonthViewModel.showCrewPrompt`.
+
 ## Next
 
-**Yours, not mine.** Play accepted the bundle and the first closed-testing release
-is in review. Nothing left before production is code; it is Google's queue and
-the testing requirement for a new personal account:
-
-1. Play's review of the closed-testing release.
-2. **At least 12 testers opted in.** The 14-day clock does not start before the
-   twelfth — the Dashboard counter reading 0 means the clock reads 0 too.
-3. **14 continuous days** with 12 or more still opted in. Dropping below 12 is
-   the one way to lose days already served.
-4. Apply for production access from the Dashboard, and wait for that review.
-5. Production, as a **staged** rollout — never 100% on day one.
+**Yours, not mine:** upload the 1.0.2 bundle as a staged production release,
+upload the captioned screenshots, and change the short description in Play
+Console. Then reach shift workers where they already are (see the growth notes
+in `docs/INSTAGRAM.md` §9).
 
 **Phase 17 (multiple rotas) is v1.1 and deliberately after the release.**
 

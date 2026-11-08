@@ -41,11 +41,15 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Increases on every upload, and never repeats — Play rejects a code it
         // has seen, including from a bundle that was deleted.
-        versionCode = 2
+        versionCode = 3
+        // 1.0.2: a shared rota code now says where to get the app, the calendar
+        // offers once to send the rota to the crew, Settings can open the Play
+        // listing, and the widget no longer redraws a stale rota when two
+        // refreshes land close together.
         // 1.0.1: fixes found by running the signed 1.0.0 build before the closed
         // test began, not reported by testers. 1.0.0 was the first upload, as a
         // release candidate rather than a preview.
-        versionName = "1.0.1"
+        versionName = "1.0.2"
     }
 
     buildFeatures {

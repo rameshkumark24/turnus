@@ -34,15 +34,27 @@ object RotaCode {
     suspend fun message(repository: RotaRepository): String = withContext(Dispatchers.Default) {
         val pattern = repository.activePattern() ?: throw NothingToShare()
         val definitions = repository.shiftDefinitions()
-        val token = ShareLink.encode(pattern, definitions)
+        compose(pattern.name, pattern.cycleLength, ShareLink.encode(pattern, definitions))
+    }
 
-        buildString {
-            append("My rota — ").append(pattern.name)
-            append(" (").append(pattern.cycleLength).append("-day cycle).\n\n")
-            append(token)
-            append("\n\nOpen Turnus, then Settings → Share and export → ")
-            append("\"I have a code\", and paste that in.")
-        }
+    /**
+     * The text of [message], without a repository, so a test can paste exactly
+     * what the app sends.
+     *
+     * The last paragraph is how to get the app. Until 1.0.2 the message told
+     * the receiver to open Turnus and gave them no way to, so the one flow
+     * meant to bring a whole crew in could only reach people who already had
+     * it. The link sits in a paragraph of its own: [read] tries each paragraph
+     * whole, and a URL with no `#` fragment never decodes as a code.
+     */
+    internal fun compose(name: String, cycleLength: Int, token: String): String = buildString {
+        append("My rota — ").append(name)
+        append(" (").append(cycleLength).append("-day cycle).\n\n")
+        append(token)
+        append("\n\nOpen Turnus, then Settings → Share and export → ")
+        append("\"I have a code\", and paste that in.")
+        append("\n\nNo Turnus yet? It's free on Google Play:\n")
+        append(PlayListing.url(PlayListing.Source.RotaCode))
     }
 
     fun shareIntent(message: String): Intent = Intent.createChooser(

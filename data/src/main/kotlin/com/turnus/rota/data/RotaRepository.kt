@@ -209,6 +209,22 @@ class RotaRepository(
     }
 
     /**
+     * Whether the calendar has already offered to send the rota to the crew.
+     *
+     * In `app_meta` for the same reasons as [observeReminderPromptSeen]: it is
+     * something the app did rather than a setting, a fresh start should offer
+     * it again, and a restored backup should not.
+     */
+    fun observeCrewPromptSeen(): Flow<Boolean> =
+        appMeta.observeAll().map { rows ->
+            rows.any { it.key == CREW_PROMPT_SEEN && it.value == "true" }
+        }
+
+    suspend fun markCrewPromptSeen() {
+        appMeta.put(AppMetaEntity(CREW_PROMPT_SEEN, "true"))
+    }
+
+    /**
      * Everything the scheduler needs, read once and consistently.
      *
      * Read as four separate calls the rota could change between them, and the
@@ -762,6 +778,9 @@ class RotaRepository(
     private companion object {
         /** Not a reminder setting — see [observeReminderPromptSeen]. */
         const val REMINDER_PROMPT_SEEN = "reminder.prompt_seen"
+
+        /** See [observeCrewPromptSeen]. */
+        const val CREW_PROMPT_SEEN = "crew.prompt_seen"
 
         const val COLOR_DAY = 0xFFE0A33C.toInt()
         const val COLOR_NIGHT = 0xFF3D5A80.toInt()

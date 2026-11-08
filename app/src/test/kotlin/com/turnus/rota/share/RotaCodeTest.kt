@@ -9,6 +9,7 @@ import com.turnus.rota.engine.ShiftDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * What survives the trip between two phones.
@@ -34,6 +35,31 @@ class RotaCodeTest {
     @Test
     fun `reads the message the app itself sends`() {
         assertRota(RotaCode.read(shareMessage()))
+    }
+
+    /**
+     * The message as 1.0.2 sends it, built by the real function: a Play link
+     * now follows the code, and nothing about it may be read as the code.
+     */
+    @Test
+    fun `reads the current message, install link and all`() {
+        val sent = RotaCode.compose(pattern().name, pattern().cycleLength, token())
+        assertTrue("play.google.com" in sent, "the message should say where to get the app")
+        assertRota(RotaCode.read(sent))
+    }
+
+    /** The receiver who copies only the link line gets told it is not a code. */
+    @Test
+    fun `the install link on its own is not a code`() {
+        val link = PlayListing.url(PlayListing.Source.RotaCode)
+        assertEquals(ShareLinkResult.Malformed, RotaCode.read(link))
+    }
+
+    /** Chat apps join lines, or turn the link into a preview and drop the line break. */
+    @Test
+    fun `reads the current message with every line break flattened to a space`() {
+        val sent = RotaCode.compose(pattern().name, pattern().cycleLength, token())
+        assertRota(RotaCode.read(sent.replace(Regex("\\s+"), " ")))
     }
 
     @Test

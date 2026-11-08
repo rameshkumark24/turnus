@@ -60,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.turnus.rota.ads.AdGate
 import com.turnus.rota.data.BackupSummary
 import com.turnus.rota.data.ShiftStyle
+import com.turnus.rota.share.PlayListing
 import com.turnus.rota.share.RotaBackupFile
 import com.turnus.rota.ui.theme.TurnusTokens
 import kotlinx.coroutines.launch
@@ -586,6 +587,46 @@ fun SettingsScreen(
                         onClick = { viewModel.undo(UndoKind.LastRestore, context, onRotaChanged) },
                     ) {
                         Text("Undo the last restore")
+                    }
+                }
+            }
+
+            // No pop-up asking for a rating, ever: it interrupts someone who
+            // opened the app to check a shift, and Play's own in-app review
+            // prompt is a dependency this app does not take. A card that is
+            // there when someone goes looking is the honest version.
+            Spacer(Modifier.height(18.dp))
+            Text("Help others find Turnus", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(10.dp))
+            Card {
+                Text("Rate it, or pass it on", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Turnus has no advertising budget. A rating on Google Play, or " +
+                        "telling someone else who works shifts, is how other people " +
+                        "find it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (!PlayListing.open(context)) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        "Google Play isn't available on this phone.",
+                                    )
+                                }
+                            }
+                        },
+                    ) {
+                        Text("Rate Turnus")
+                    }
+                    OutlinedButton(
+                        onClick = { context.startActivity(PlayListing.tellSomeoneIntent()) },
+                    ) {
+                        Text("Tell someone")
                     }
                 }
             }

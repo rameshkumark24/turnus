@@ -2,8 +2,14 @@ package com.turnus.rota.widget
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -13,6 +19,7 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -57,8 +64,25 @@ class RotaWidget : GlanceAppWidget() {
         // Every draw sets the next midnight redraw, so the chain cannot lapse
         // while a widget is on the home screen.
         DateRollover.schedule(context)
-        val snapshot = load(context)
+        val first = load(context)
         provideContent {
+            // Glance keeps a session open for a while after drawing, and an
+            // update that lands inside it recomposes this content without
+            // calling provideGlance again — so a rota read only above would be
+            // drawn a second time, stale. Every refresh bumps this number in
+            // the widget's own state first (RotaWidgetReceiver.refresh), and an
+            // open session reloads its state on update, so a new number here
+            // means "read the rota again".
+            val generation = currentState(GENERATION) ?: 0L
+            var snapshot by remember { mutableStateOf(first) }
+            var readFor by remember { mutableStateOf(generation) }
+            LaunchedEffect(generation) {
+                if (generation != readFor) {
+                    DateRollover.schedule(context)
+                    snapshot = load(context)
+                    readFor = generation
+                }
+            }
             Content(snapshot, WidgetPalette.of(context))
         }
     }
@@ -101,6 +125,12 @@ class RotaWidget : GlanceAppWidget() {
         const val DAYS_SHOWN = 7
     }
 }
+
+/**
+ * How many times the rota has been asked to redraw, kept in each widget's
+ * Glance state. Only ever compared for change; the value means nothing.
+ */
+internal val GENERATION = longPreferencesKey("rota.generation")
 
 internal sealed interface Snapshot {
     data object NoRota : Snapshot

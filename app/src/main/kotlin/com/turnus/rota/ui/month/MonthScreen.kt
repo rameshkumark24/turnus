@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +72,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun MonthScreen(
@@ -81,7 +83,9 @@ fun MonthScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val showReminderPrompt by viewModel.showReminderPrompt.collectAsStateWithLifecycle()
+    val showCrewPrompt by viewModel.showCrewPrompt.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // The one ask Android allows, spent only on an explicit tap. Refusing is a
     // complete answer: the card is retired either way, because asking twice is
@@ -184,6 +188,25 @@ fun MonthScreen(
                                 }
                             },
                             onDismiss = viewModel::dismissReminderPrompt,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    } else if (showCrewPrompt) {
+                        CrewPromptCard(
+                            onSend = {
+                                scope.launch {
+                                    runCatching { viewModel.crewShareIntent() }
+                                        .onSuccess {
+                                            context.startActivity(it)
+                                            viewModel.dismissCrewPrompt()
+                                        }
+                                        .onFailure {
+                                            snackbarHostState.showSnackbar(
+                                                it.message ?: "Could not share your rota",
+                                            )
+                                        }
+                                }
+                            },
+                            onDismiss = viewModel::dismissCrewPrompt,
                         )
                         Spacer(Modifier.height(10.dp))
                     }
@@ -760,6 +783,48 @@ private fun ReminderPromptCard(
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onEnable) { Text("Remind me") }
+            TextButton(onClick = onDismiss) { Text("Not now") }
+        }
+    }
+}
+
+/**
+ * The one-time offer to send the rota to the rest of the crew.
+ *
+ * The same shape as [ReminderPromptCard], and asked once for the same reason.
+ * The body says what the code carries, because the first thing anyone asks
+ * before sending something from a calendar is what else goes with it — and
+ * the answer, nothing but the cycle, is the reason it is safe to send.
+ */
+@Composable
+private fun CrewPromptCard(
+    onSend: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 13.dp)
+            .semantics(mergeDescendants = true) { },
+    ) {
+        Text(
+            text = "Same rota as your crew?",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = "Send it to them in one message and they won't have to type it in. " +
+                "Only the pattern goes: no notes, no changed days.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onSend) { Text("Send my rota") }
             TextButton(onClick = onDismiss) { Text("Not now") }
         }
     }

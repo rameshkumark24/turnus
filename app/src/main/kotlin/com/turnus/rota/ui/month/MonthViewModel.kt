@@ -1,8 +1,10 @@
 package com.turnus.rota.ui.month
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.turnus.rota.data.RotaRepository
+import com.turnus.rota.share.RotaCode
 import com.turnus.rota.ui.TodayClock
 import com.turnus.rota.data.ShiftStyle
 import com.turnus.rota.engine.DayNumber
@@ -17,8 +19,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -291,6 +298,57 @@ class MonthViewModel(
                 throw cancellation
             } catch (_: Exception) {
                 // See above.
+            }
+        }
+    }
+
+    /**
+     * Whether to offer, once, to send the rota to the rest of the crew.
+     *
+     * A crew shares one rotation, so the first person to set it up can save
+     * everyone else the typing — and that is also how anyone else on the shift
+     * ever hears of this app. The offer sits in Settings already, where nobody
+     * looks; this asks once, on the calendar.
+     *
+     * Never in the same visit as the reminder offer. Whether that one was
+     * already settled is read once, when the calendar starts watching, so
+     * answering it does not make this appear in its place a second later: two
+     * asks back to back is nagging. It shows on a later visit instead.
+     */
+    val showCrewPrompt: StateFlow<Boolean> = flow {
+        val reminderSettledBeforeThisVisit = combine(
+            repository.observeReminderSettings(),
+            repository.observeReminderPromptSeen(),
+        ) { settings, seen -> seen || settings.enabled }.first()
+        if (!reminderSettledBeforeThisVisit) {
+            emit(false)
+            return@flow
+        }
+        emitAll(repository.observeCrewPromptSeen().map { seen -> !seen })
+    }
+        // Failing to read the flag hides the card, the harmless direction.
+        .catch { emit(false) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
+
+    /** The same message as Settings → "Send my rota", for the crew card's button. */
+    suspend fun crewShareIntent(): Intent = RotaCode.shareIntent(RotaCode.message(repository))
+
+    /**
+     * Retires the crew card, whether it was used or declined. Silent on failure
+     * for the same reason as [dismissReminderPrompt].
+     */
+    fun dismissCrewPrompt() {
+        viewModelScope.launch {
+            try {
+                repository.markCrewPromptSeen()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // The card comes back next visit; nothing else is affected.
             }
         }
     }
